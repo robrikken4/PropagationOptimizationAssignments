@@ -490,8 +490,14 @@ int main( )
                 }
 
                 // Define propagator type
-                TranslationalPropagatorType propagatorType = cowell;
+                TranslationalPropagatorType propagatorType;
 
+                if( j == 0){
+                    propagatorType = encke;
+                }
+                else{
+                    propagatorType = cowell;
+                }
 
                 // Create propagator settings for patched conic (per arc; backward and forward from arc midpoint)
                 // Propagation currently terminates on sphere of influence of body.
@@ -522,8 +528,9 @@ int main( )
                 }
                 else if ( j != 0){
                     int i = 0;
-                    std::map < double, Eigen::Vector6d > interpolatedState;
+
                     for (auto resultIterator : fullProblemResultForEachLeg){
+                        std::map < double, Eigen::Vector6d > interpolatedState;
                         std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
                         std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
                         std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator =

@@ -1,0 +1,18 @@
+if (k == 1){
+            for (auto resultIterator : fullProblemResultForEachLeg){
+                std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
+                //std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
+                benchmarkInterpolator =
+                        interpolators::createOneDimensionalInterpolator(
+                            benchmark, interpolatorSettings );
+            }
+        }
+        if ( k != 1){
+            for (auto restultIterator: fullProblemResultForEachLeg){
+                std::map< double, Eigen::Vector6d> resulPerLag = restultIterator.second;
+
+                for( auto timeIterator : resulPerLag)
+                {
+                    interpolatedState[ timeIterator.first ] =
+                            benchmarkInterpolator->interpolate(
+                                timeIterator.first );

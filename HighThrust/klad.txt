@@ -1,0 +1,81 @@
+        else if( k == 1){
+            integratorSettings =
+                    std::make_shared< numerical_integrators::IntegratorSettings < > > (
+                        numerical_integrators::rungeKutta4, TUDAT_NAN, 1000.0 );
+        }
+        else if ( k == 2) {
+                integratorSettings =
+                        std::make_shared< numerical_integrators::IntegratorSettings < > > (
+                            numerical_integrators::rungeKutta4, TUDAT_NAN, 100.0 );
+        }
+        else if ( k == 3) {
+                integratorSettings =
+                        std::make_shared< numerical_integrators::IntegratorSettings < > > (
+                            numerical_integrators::rungeKutta4, TUDAT_NAN, 10.0 );
+        }
+
+            for( unsigned int k = 0; k < 4; k++)
+            {
+                if( k == 0){
+                    integratorSettings =
+                            std::make_shared< numerical_integrators::IntegratorSettings < > > (
+                                numerical_integrators::rungeKutta4, TUDAT_NAN, 10000.0 );
+                }
+                else if( k == 1){
+                    integratorSettings =
+                            std::make_shared< numerical_integrators::IntegratorSettings < > > (
+                                numerical_integrators::rungeKutta4, TUDAT_NAN, 1000.0 );
+                }
+                else if ( k == 2) {
+                    integratorSettings =
+                            std::make_shared< numerical_integrators::IntegratorSettings < > > (
+                                numerical_integrators::rungeKutta4, TUDAT_NAN, 100.0 );
+                }
+                else if ( k == 3) {
+                    integratorSettings =
+                            std::make_shared< numerical_integrators::IntegratorSettings < > > (
+                                numerical_integrators::rungeKutta4, TUDAT_NAN, 10.0 );
+
+            // Define integrator settings
+            //std::shared_ptr< IntegratorSettings < double > > integratorSettings;
+            double relativeTolerance;
+            double absoluteTolerance;
+            double minimumStepSize   = std::numeric_limits< double >::epsilon( );
+            double maximumStepSize   = std::numeric_limits< double >::infinity( );
+            double initialStepSize   = 1000;
+            double initialTime = TUDAT_NAN;
+            if( k == 0){
+                relativeTolerance = 1E-8;
+                absoluteTolerance = 1E-8;
+            }
+            else if( k == 1){
+                relativeTolerance = 1E-9;
+                absoluteTolerance = 1E-9;
+            }
+            else if( k == 2){
+                relativeTolerance = 1E-10;
+                absoluteTolerance = 1E-10;
+            }
+            else if( k == 3){
+                relativeTolerance = 1E-11;
+                absoluteTolerance = 1E-11;
+            }
+            else if( k == 4){
+                relativeTolerance = 1E-12;
+                absoluteTolerance = 1E-12;
+            }
+            else if( k == 5){
+                relativeTolerance = 1E-13;
+                absoluteTolerance = 1E-13;
+            }
+            else if( k == 6){
+                relativeTolerance = 1E-14;
+                absoluteTolerance = 1E-14;
+            }
+            else if (k == 7 ) {
+                relativeTolerance = 1E-15;
+                absoluteTolerance = 1E-15;
+            }
+            integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings < > > (
+                        initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg56, minimumStepSize,
+                        maximumStepSize, relativeTolerance, absoluteTolerance );

@@ -198,9 +198,9 @@ int main( )
     TranslationalPropagatorType propagatorType;
     std::map< int, std::map< double, Eigen::Vector6d > > fullBenchmark;
     std::map< int, std::map< double, Eigen::Vector6d > > refMap;
+    std::map< unsigned int, double > result;
     for (unsigned int j = 0; j<8; j++){
-        if ( j == 0){
-            std::map< unsigned int, double > result;
+            //std::map< unsigned int, double > result;
             // Create an object of `steady_clock` class
             std::chrono::steady_clock sc;
 
@@ -223,7 +223,7 @@ int main( )
             }
             else{
                 double initialTime = TUDAT_NAN;
-                double fixedStepSize = 10000000;
+                double fixedStepSize = 100000;
                 integratorSettings =
                         std::make_shared< IntegratorSettings< double> >
                         ( rungeKutta4,  initialTime , fixedStepSize);
@@ -263,9 +263,8 @@ int main( )
             }
 
             // Define propagator type
-            for( unsigned int j = 0; j<8; j++){
                 if ( j == 0){
-                    propagatorType = cowell;
+                    propagatorType = encke;
                 }
                 else if ( j == 1){
                     propagatorType = encke;
@@ -319,8 +318,9 @@ int main( )
                 }
                 else if ( j != 0){
                     int i = 0;
-                    std::map < double, Eigen::Vector6d > interpolatedState;
+
                     for (auto resultIterator : fullProblemResultForEachLeg){
+                        std::map < double, Eigen::Vector6d > interpolatedState;
                         std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
                         std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
                         std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator =
@@ -380,12 +380,11 @@ int main( )
                 input_output::writeDataMapToTextFile( result, "Q2timeResult"+std::to_string(j) + ".dat", outputPath );
                 // The exit code EXIT_SUCCESS indicates that the program was successfully executed.
 
-            }
+
 
 
 
         }
-    }
 
     return EXIT_SUCCESS;
 }

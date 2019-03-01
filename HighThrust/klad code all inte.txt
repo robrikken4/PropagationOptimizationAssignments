@@ -12,7 +12,7 @@
 #include <Tudat/Astrodynamics/TrajectoryDesign/trajectory.h>
 #include <Tudat/SimulationSetup/PropagationSetup/propagationPatchedConicFullProblem.h>
 #include <Tudat/SimulationSetup/PropagationSetup/propagationLambertTargeterFullProblem.h>
-#include <chrono>
+
 
 #include "../applicationOutput.h"
 
@@ -98,7 +98,7 @@ int main( )
     // Load Spice kernels.
     spice_interface::loadStandardSpiceKernels( );
 
-    std::string outputPath = tudat_applications::getOutputPath( "HighThrust_Q3" );
+    std::string outputPath = tudat_applications::getOutputPath( "HighThrust" );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////        TRANSFER SETTINGS                 //////////////////////////////////////////////////////
@@ -195,12 +195,10 @@ int main( )
             getAccelerationModelsPerturbedPatchedConicsTrajectory(
                 transferLegTypes.size( ), "Sun", "Spacecraft", bodyMapForPropagation, transferBodyOrder );
     std::shared_ptr< IntegratorSettings < double > > integratorSettings;
-
+    std::map< unsigned int, double > result;
     std::map< int, std::map< double, Eigen::Vector6d > > fullBenchmark;
     unsigned int stepSizeDeterimeBST;
-    std::map< double, Eigen::Vector6d> singeRunRef;
-    std::map< int, std::map< double, Eigen::Vector6d > > refMap;
-    for (unsigned int j = 0;j < 4;j++)
+    for (unsigned int j = 0;j < 9;j++)
     {
 
         unsigned int numberOfTollerances;
@@ -210,11 +208,11 @@ int main( )
         }
         else if( j == 1)
         {
-            numberOfTollerances = 7;
+            numberOfTollerances = 4;
         }
         else if( j == 2)
         {
-            numberOfTollerances = 7;
+            numberOfTollerances = 4;
         }
         else if( j == 3)
         {
@@ -222,35 +220,40 @@ int main( )
         }
         else if( j == 4)
         {
-            numberOfTollerances = 5;
+            numberOfTollerances = 6;
         }
         else if( j == 5)
         {
-            numberOfTollerances = 4;
+            numberOfTollerances = 6;
+        }
+        else if( j == 6)
+        {
+            numberOfTollerances = 5;
+        }
+        else if( j == 7)
+        {
+            numberOfTollerances = 6;
+        }
+        else if( j == 8)
+        {
+            numberOfTollerances = 6;
         }
         else {
             std::cout << " Error Number of cases out bound "<< '\n';
             numberOfTollerances = 0;
         }
 
-        if( j == 0){
-            stepSizeDeterimeBST = 1;
+        if( j == 7){
+            stepSizeDeterimeBST = 7;
         }
         else {
-            stepSizeDeterimeBST = 3;
+            stepSizeDeterimeBST = 2;
         }
-
         for( unsigned int k = 0; k < numberOfTollerances; k++)
-        {
+        {   clock_t tStart = clock();
 
 
-            for( unsigned int l = 0; l<stepSizeDeterimeBST; l++){
-                std::map< unsigned int, double > result;
-                // Create an object of `steady_clock` class
-                std::chrono::steady_clock sc;
-
-                // Start timer
-                auto start = sc.now();
+            for( unsigned int l = 1; l<stepSizeDeterimeBST; l++){
                 // Define integrator settings
                 double relativeTolerance;
                 double absoluteTolerance;
@@ -259,200 +262,199 @@ int main( )
                 double initialStepSize   = 1000;
                 double initialTime = TUDAT_NAN;
                 double fixedStepSize;
-
                 if( j == 0){
-                    relativeTolerance = 1E-14;
-                    absoluteTolerance = 1E-14;
+                    relativeTolerance = 1E-13;
+                    absoluteTolerance = 1E-13;
+                    integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double > > (
+                                initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg56, minimumStepSize,
+                                maximumStepSize, relativeTolerance, absoluteTolerance );
+                }
+
+                if( j == 1){
+                    if( k == 0){
+                        fixedStepSize = 1000;
+                    }
+                    else if( k == 1){
+                        fixedStepSize = 10000;
+                    }
+                    else if( k == 2){
+                        fixedStepSize = 100000;
+                    }
+                    else if( k == 3){
+                        fixedStepSize = 1000000;
+                    }
+                    integratorSettings =
+                            std::make_shared< IntegratorSettings<double > >
+                            ( euler,  initialTime , fixedStepSize);
+                }
+                if( j == 2){
+                    if( k == 0){
+                        fixedStepSize = 1000;
+                    }
+                    else if( k == 1){
+                        fixedStepSize = 10000;
+                    }
+                    else if( k == 2){
+                        fixedStepSize = 100000;
+                    }
+                    else if( k == 3){
+                        fixedStepSize = 1000000;
+                    }
+                    integratorSettings =
+                            std::make_shared< IntegratorSettings< double> >
+                            ( rungeKutta4,  initialTime , fixedStepSize);
+                }
+                if( j == 3 || j == 4 || j == 5){
+
+                    if( k == 0){
+                        relativeTolerance = 1E-5;
+                        absoluteTolerance = 1E-5;
+                    }
+                    else if( k == 1){
+                        relativeTolerance = 1E-7;
+                        absoluteTolerance = 1E-7;
+                    }
+                    else if( k == 2){
+                        relativeTolerance = 1E-9;
+                        absoluteTolerance = 1E-9;
+                    }
+                    else if( k == 3){
+                        relativeTolerance = 1E-11;
+                        absoluteTolerance = 1E-11;
+                    }
+                    else if( k == 4){
+                        relativeTolerance = 1E-13;
+                        absoluteTolerance = 1E-13;
+                    }
+                    else if( k == 5){
+                        relativeTolerance = 1E-15;
+                        absoluteTolerance = 1E-15; //not for dormiss
+
+                    }
+                }
+                if( j == 3){
                     integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double > > (
                                 initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg45, minimumStepSize,
                                 maximumStepSize, relativeTolerance, absoluteTolerance );
                 }
-
-
-                if(j == 1){
-
-
-                    if( k == 0){
-                        relativeTolerance = 1E-7;
-                        absoluteTolerance = 1E-7;
-                    }
-                    else if( k == 1){
-                        relativeTolerance = 1E-8;
-                        absoluteTolerance = 1E-8;
-                    }
-                    else if( k == 2){
-                        relativeTolerance = 1E-9;
-                        absoluteTolerance = 1E-9;
-                    }
-                    else if( k == 3){
-                        relativeTolerance = 1E-10;
-                        absoluteTolerance = 1E-10;
-                    }
-                    else if( k == 4){
-                        relativeTolerance = 1E-11;
-                        absoluteTolerance = 1E-11;
-                    }
-                    else if( k == 5){
-                        relativeTolerance = 1E-12;
-                        absoluteTolerance = 1E-12;
-                    }
-                    else if( k == 6){
-                        relativeTolerance = 1E-13;
-                        absoluteTolerance = 1E-13;
-                    }
-
-
-
+                else if( j == 4 && l == 1){
+                    integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double > > (
+                                initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg56, minimumStepSize,
+                                maximumStepSize, relativeTolerance, absoluteTolerance );
+                }
+                else if( j == 5 && l == 1){
                     integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double> > (
                                 initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg78, minimumStepSize,
                                 maximumStepSize, relativeTolerance, absoluteTolerance );
                 }
-                else if(j == 2){
+                else if(j == 6 && l == 1){
                     if( k == 0){
                         relativeTolerance = 1E-5;
                         absoluteTolerance = 1E-5;
                     }
                     else if( k == 1){
-                        relativeTolerance = 1E-6;
-                        absoluteTolerance = 1E-6;
-                    }
-                    else if( k == 2){
                         relativeTolerance = 1E-7;
                         absoluteTolerance = 1E-7;
                     }
-                    else if( k == 3){
-                        relativeTolerance = 1E-8;
-                        absoluteTolerance = 1E-8;
-                    }
-                    else if( k == 4){
+                    else if( k == 2){
                         relativeTolerance = 1E-9;
                         absoluteTolerance = 1E-9;
                     }
-                    else if( k == 5){
-                        relativeTolerance = 1E-10;
-                        absoluteTolerance = 1E-10;
-                    }
-                    else if( k == 6){
+                    else if( k == 3){
                         relativeTolerance = 1E-11;
                         absoluteTolerance = 1E-11;
                     }
-
+                    else if( k == 4){
+                        relativeTolerance = 1E-13;
+                        absoluteTolerance = 1E-13;
+                    }
                     integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double> > (
                                 initialTime, initialStepSize,  RungeKuttaCoefficients::rungeKutta87DormandPrince , minimumStepSize,
                                 maximumStepSize, relativeTolerance, absoluteTolerance );
                 }
-                if(j == 3){
-
-
-                    if( k == 0){
-                        relativeTolerance = 1E-7;
-                        absoluteTolerance = 1E-7;
-                    }
-                    else if( k == 1){
-                        relativeTolerance = 1E-8;
-                        absoluteTolerance = 1E-8;
-                    }
-                    else if( k == 2){
-                        relativeTolerance = 1E-9;
-                        absoluteTolerance = 1E-9;
-                    }
-                    else if( k == 3){
-                        relativeTolerance = 1E-10;
-                        absoluteTolerance = 1E-10;
-                    }
-                    else if( k == 4){
-                        relativeTolerance = 1E-11;
-                        absoluteTolerance = 1E-11;
-                    }
-                    else if( k == 5){
-                        relativeTolerance = 1E-12;
-                        absoluteTolerance = 1E-12;
-                    }
-
-
-                    integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double> > (
-                                initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg56, minimumStepSize,
-                                maximumStepSize, relativeTolerance, absoluteTolerance );
-                }
-                else if( j == 4){
+                else if( j == 7){
                     if( k == 0){
                         relativeTolerance = 1E-5;
                         absoluteTolerance = 1E-5;
                     }
                     else if( k == 1){
-                        relativeTolerance = 1E-6;
-                        absoluteTolerance = 1E-6;
-                    }
-                    else if( k == 2){
                         relativeTolerance = 1E-7;
                         absoluteTolerance = 1E-7;
                     }
+                    else if( k == 2){
+                        relativeTolerance = 1E-9;
+                        absoluteTolerance = 1E-9;
+                    }
                     else if( k == 3){
-                        relativeTolerance = 1E-8;
-                        absoluteTolerance = 1E-8;
+                        relativeTolerance = 1E-11;
+                        absoluteTolerance = 1E-11;
                     }
                     else if( k == 4){
-                        relativeTolerance = 1E-9;
-                        absoluteTolerance = 1E-9;
+                        relativeTolerance = 1E-13;
+                        absoluteTolerance = 1E-13;
                     }
-                    double steps = 4;
+                    else if( k == 5){
+                        relativeTolerance = 1E-15;
+                        absoluteTolerance = 1E-15;
+                    }
+                    int steps;
+                    if( l == 1){
+                        steps = 2;
+                    }
+                    else if (l == 2) {
+                        steps = 4;
+                    }
+                    else if (l == 3) {
+                        steps = 6;
+                    }
+
+                    else if (l == 4) {
+                        steps = 8;
+                    }
+                    else if (l == 5) {
+                        steps = 10;
+                    }
+                    else if (l == 6) {
+                        steps = 12;
+                    }
+
+
+
 
                     integratorSettings = std::make_shared < BulirschStoerIntegratorSettings < double >>(
                                                                                                            initialTime, initialStepSize, bulirsch_stoer_sequence, steps, minimumStepSize,
                                                                                                            maximumStepSize, relativeTolerance, absoluteTolerance);
                 }
-                else if( j == 5){
-                if( k == 0){
-                    relativeTolerance = 1E-5;
-                    absoluteTolerance = 1E-5;
-                }
-                else if( k == 1){
-                    relativeTolerance = 1E-6;
-                    absoluteTolerance = 1E-6;
-                }
-                else if( k == 2){
-                    relativeTolerance = 1E-7;
-                    absoluteTolerance = 1E-7;
-                }
-                else if( k == 3){
-                    relativeTolerance = 1E-8;
-                    absoluteTolerance = 1E-8;
-                }
-                else if( k == 4){
-                    relativeTolerance = 1E-9;
-                    absoluteTolerance = 1E-9;
-                }
-                    double steps = 6;
-
-                    integratorSettings = std::make_shared < BulirschStoerIntegratorSettings < double >>(
-                                                                                                           initialTime, initialStepSize, bulirsch_stoer_sequence, steps, minimumStepSize,
-                                                                                                           maximumStepSize, relativeTolerance, absoluteTolerance);
-                }
-                if(j == 6){
-
-
+                else if(j == 8){
                     if( k == 0){
-                        relativeTolerance = 1E-7;
-                        absoluteTolerance = 1E-7;
+                        relativeTolerance = 1E-5;
+                        absoluteTolerance = 1E-5;
                     }
                     else if( k == 1){
-                        relativeTolerance = 1E-8;
-                        absoluteTolerance = 1E-8;
+                        relativeTolerance = 1E-7;
+                        absoluteTolerance = 1E-7;
                     }
                     else if( k == 2){
                         relativeTolerance = 1E-9;
                         absoluteTolerance = 1E-9;
                     }
                     else if( k == 3){
-                        relativeTolerance = 1E-10;
-                        absoluteTolerance = 1E-10;
+                        relativeTolerance = 1E-11;
+                        absoluteTolerance = 1E-11;
                     }
-
-
-                    integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double> > (
-                                initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg56, minimumStepSize,
-                                maximumStepSize, relativeTolerance, absoluteTolerance );
+                    else if( k == 4){
+                        relativeTolerance = 1E-13;
+                        absoluteTolerance = 1E-13;
+                    }
+                    else if( k == 5){
+                        relativeTolerance = 1E-15;
+                        absoluteTolerance = 1E-15;
+                    }
+                    integratorSettings = std::make_shared<AdamsBashforthMoultonSettings<double>>(
+                                                                                                    initialTime, initialStepSize, minimumStepSize,maximumStepSize,
+                                                                                                    relativeTolerance, absoluteTolerance);
                 }
+
                 // Create list of relevant bodies
                 std::vector< std::string > bodyList;
                 for( unsigned int i = 0; i < transferBodyOrder.size( ); i++ )
@@ -484,15 +486,9 @@ int main( )
                 // Define propagator type
                 TranslationalPropagatorType propagatorType;
                 if ( j == 0){
-                    propagatorType = encke ;
+                    propagatorType = encke;
                 }
-                else if (l == 0) {
-                    propagatorType = unified_state_model_modified_rodrigues_parameters;
-                }
-                else if (l == 1) {
-                    propagatorType = unified_state_model_quaternions;
-                }
-                else if (l == 2){
+                else {
                     propagatorType = cowell;
                 }
 
@@ -519,21 +515,18 @@ int main( )
 
                 std::shared_ptr< interpolators::InterpolatorSettings > interpolatorSettings =
                         std::make_shared< interpolators::LagrangeInterpolatorSettings >( 8 );
-                std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator;
-                //std::map < double, Eigen::Vector6d > interpolatedState;
-                if( j == 0){
-                    refMap = fullProblemResultForEachLeg;
-                }
-                else if ( j != 0){
-                    int i = 0;
 
+                if (j == 0){
+                    fullBenchmark = fullProblemResultForEachLeg;
+                }
+                if ( j != 0){
+                    std::map < double, Eigen::Vector6d > interpolatedState;
                     for (auto resultIterator : fullProblemResultForEachLeg){
-                        std::map < double, Eigen::Vector6d > interpolatedState;
                         std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
                         std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
                         std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator =
                                 interpolators::createOneDimensionalInterpolator(
-                                    refMap.at(i), interpolatorSettings );
+                                    benchmark, interpolatorSettings );
 
                         for( auto timeIterator : resulPerLag)
                         {
@@ -543,12 +536,11 @@ int main( )
 
                         }
                         input_output::writeDataMapToTextFile(
-                                    interpolatedState, "numericalResult" +
-                                    std::to_string( resultIterator.first ) + "reffence"+ std::to_string(j)+std::to_string(k)+std::to_string(l)+"Interpolated" + ".dat", outputPath );
-                        i = i+1;
+                                    resultIterator.second, "numericalResult" +
+                                    std::to_string( resultIterator.first ) + "reffence" +std::to_string(j)+std::to_string(k)+std::to_string(l)+"Interpolated" + ".dat", outputPath );
+
                     }
                 }
-
 
 
 
@@ -577,23 +569,15 @@ int main( )
                                 resultIterator.second, "dependentResult" +
                                 std::to_string( resultIterator.first )+ "refference" +std::to_string(j)+ std::to_string(k) +std::to_string(l) + ".dat", outputPath );
                 }
-                // End timer (starting & ending is done by measuring the time at the moment the process started & ended respectively)
-                auto end = sc.now();
-
-                // Measure time span between start & end
-                auto time_span = static_cast<std::chrono::duration<double>>(end - start);
-                double runTimeInSeconds = time_span.count( );
-                result.insert(std::pair<unsigned int,double>(j,runTimeInSeconds));
-                // Write perturbed satellite propagation history to file.
-                input_output::writeDataMapToTextFile( result, "timeResult"+std::to_string(j)+ std::to_string(k) +std::to_string(l) + ".dat", outputPath );
-
-
             }
-
+            result.insert(std::pair<int,double>(j,(clock()-tStart)/CLOCKS_PER_SEC));
         }
 
 
     }
+
+    // Write perturbed satellite propagation history to file.
+    input_output::writeDataMapToTextFile( result, "timeResult.dat", outputPath );
     // The exit code EXIT_SUCCESS indicates that the program was successfully executed.
     return EXIT_SUCCESS;
 }
