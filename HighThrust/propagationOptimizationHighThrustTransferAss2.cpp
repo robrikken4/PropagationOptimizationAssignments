@@ -152,6 +152,7 @@ int main( )
     // Create body map
     NamedBodyMap bodyMapForPatchedConic = setupBodyMapFromEphemeridesForPatchedConicsTrajectory(
                 "Sun", "Spacecraft", transferBodyOrder );
+    bodyMapForPatchedConic[ "Saturn" ] = std::make_shared< Body >( );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             CREATE SPACECRAFT            //////////////////////////////////////////////////////
