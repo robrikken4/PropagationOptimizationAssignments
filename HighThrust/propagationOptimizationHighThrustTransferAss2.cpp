@@ -10,10 +10,12 @@
 
 #include <chrono>
 
+#include <Tudat/Astrodynamics/Ephemerides/approximatePlanetPositions.h>
 #include <Tudat/SimulationSetup/tudatSimulationHeader.h>
 #include <Tudat/Astrodynamics/TrajectoryDesign/trajectory.h>
 #include <Tudat/SimulationSetup/PropagationSetup/propagationPatchedConicFullProblem.h>
 #include <Tudat/SimulationSetup/PropagationSetup/propagationLambertTargeterFullProblem.h>
+#include <tudatApplications/AE4866-Assignments-P-O/HighThrust/highThrustTransfer.h>
 
 #include "../applicationOutput.h"
 #include <cmath>
@@ -50,8 +52,15 @@ std::vector < basic_astrodynamics::AccelerationMap > getAccelerationModelsPertur
                     std::make_shared< simulation_setup::AccelerationSettings>(
                         basic_astrodynamics::cannon_ball_radiation_pressure));
         }
+
+        if ( caseNumber == 4 ){
+            accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i ) ].push_back(
+                         std::make_shared< SphericalHarmonicAccelerationSettings >( 2, 2 ) );
+        }
+        else{
         accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i ) ].push_back(
                     std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+        }
         if( caseNumber == 2){
             accelerationSettingsMap[ nameBodyToPropagate ][ "Saturn" ].push_back(
                         std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
@@ -65,8 +74,14 @@ std::vector < basic_astrodynamics::AccelerationMap > getAccelerationModelsPertur
         {
             if( transferBodyOrder.at( i ) != transferBodyOrder.at( i + 1 ) )
             {
+                if ( caseNumber == 4 ){
+                    accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i + 1 ) ].push_back(
+                                 std::make_shared< SphericalHarmonicAccelerationSettings >( 2, 2 ) );
+                }
+                else{
                 accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i + 1 ) ].push_back(
                             std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+                }
             }
 
         }
@@ -113,11 +128,12 @@ std::vector < basic_astrodynamics::AccelerationMap > getAccelerationModelsPertur
  */
 int main( )
 {
-    for( unsigned int k = 0; k <3; k++){
+
     // Load Spice kernels.
     spice_interface::loadStandardSpiceKernels( );
 
     std::string outputPath = tudat_applications::getOutputPath( "HighThrustAss2" );
+    std::map< int, std::map< double, Eigen::Vector6d > > refMap;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////        TRANSFER SETTINGS                 //////////////////////////////////////////////////////
@@ -150,9 +166,31 @@ int main( )
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // Create body map
-    NamedBodyMap bodyMapForPatchedConic = setupBodyMapFromEphemeridesForPatchedConicsTrajectory(
+    NamedBodyMap bodyMapForPatchedConic = setupBodyMapFromEphemeridesForPatchedConicsTrajectoryPO(
                 "Sun", "Spacecraft", transferBodyOrder );
+
     bodyMapForPatchedConic[ "Saturn" ] = std::make_shared< Body >( );
+    bodyMapForPatchedConic[ "Saturn" ]->setEphemeris(
+                std::make_shared< ephemerides::ApproximatePlanetPositions>(
+                        "Saturn") );
+    bodyMapForPatchedConic[ "Saturn" ]->setGravityFieldModel(
+                createGravityFieldModel(
+                    std::make_shared< CentralGravityFieldSettings >(
+                        spice_interface::getBodyGravitationalParameter(
+                             "Saturn"  ) ),  "Saturn"  ) );
+
+//    double gravitationalParameter = bodyMapForPatchedConic[ "Sun" ]->getGravityFieldModel()->getGravitationalParameter();
+//    double referenceRadius = bodyMapForPatchedConic[ "Sun" ]->getShapeModel()->getAverageRadius();
+//    Eigen::MatrixXd normalizedCosineCoefficients = (Eigen::Matrix3d( ) << 1.0, 0.0, 0.0,
+//                                                    0.0, 0.0, 0.0,
+//                                                    0.0, 0.0, 2.0E-7 / calculateLegendreGeodesyNormalizationFactor( 2, 2) ).finished( );  // NOTE: entry (i,j) denotes coefficient at degree i and order j
+//    Eigen::MatrixXd normalizedSineCoefficients = (Eigen::Matrix3d( ) << 0.0, 0.0, 0.0,
+//                                                  0.0, 0.0, 0.0,
+//                                                  0.0, 0.0, 0.0/ calculateLegendreGeodesyNormalizationFactor( 2, 2) ).finished( ); // NOTE: entry (i,j) denotes coefficient at degree i and order j
+//    std::string associatedReferenceFrame = "IAU_Sun";
+
+//    bodyMapForPatchedConic[ "Sun" ]->gravityFieldSettings = std::make_shared< SphericalHarmonicsGravityFieldSettings >(gravitationalParameter, referenceRadius, normalizedCosineCoefficients, normalizedSineCoefficients, associatedReferenceFrame);
+
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             CREATE SPACECRAFT            //////////////////////////////////////////////////////
@@ -186,8 +224,7 @@ int main( )
 
     std::vector< double > trajectoryIndependentVariables;
     for( unsigned int i = 0; i < trajectoryParameters.size( ) - 1; i++ )
-    {
-        trajectoryIndependentVariables.push_back( trajectoryParameters.at( i ) * physical_constants::JULIAN_DAY );
+    {        trajectoryIndependentVariables.push_back( trajectoryParameters.at( i ) * physical_constants::JULIAN_DAY );
     }
 
     // Add entry for interface consistency
@@ -221,16 +258,22 @@ int main( )
 
     // Define environment for propagation (equal to that of patched conic)
     NamedBodyMap bodyMapForPropagation = bodyMapForPatchedConic;
-
+        for( unsigned int k = 0; k <4; k++){
     // Define acceleration settings
     std::vector< basic_astrodynamics::AccelerationMap > accelerationMap =
             getAccelerationModelsPerturbedPatchedConicsTrajectory(
                 transferLegTypes.size( ), "Sun", "Spacecraft", bodyMapForPropagation, transferBodyOrder,k );
 
     // Define integrator settings
-    std::shared_ptr< numerical_integrators::IntegratorSettings < > > integratorSettings =
-            std::make_shared< numerical_integrators::IntegratorSettings < > > (
-                numerical_integrators::rungeKutta4, TUDAT_NAN, 1000.0 );
+    double relativeTolerance = 1E-11;
+    double absoluteTolerance = 1E-11;
+    double minimumStepSize   = std::numeric_limits< double >::epsilon( );
+    double maximumStepSize   = std::numeric_limits< double >::infinity( );
+    double initialStepSize   = 1000;
+    double initialTime = TUDAT_NAN;
+    std::shared_ptr< IntegratorSettings < double > > integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double> > (
+                initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg78, minimumStepSize,
+                maximumStepSize, relativeTolerance, absoluteTolerance );
 
     // Create list of relevant bodies
     std::vector< std::string > bodyList;
@@ -261,7 +304,7 @@ int main( )
     }
 
     // Define propagator type
-    TranslationalPropagatorType propagatorType = cowell;
+    TranslationalPropagatorType propagatorType = unified_state_model_quaternions;
 
     // Create propagator settings for patched conic (per arc; backward and forward from arc midpoint)
     // Propagation currently terminates on sphere of influence of body.
@@ -291,6 +334,38 @@ int main( )
 
     // End timer (starting & ending is done by measuring the time at the moment the process started & ended respectively)
     auto end = sc.now();
+
+    std::shared_ptr< interpolators::InterpolatorSettings > interpolatorSettings =
+            std::make_shared< interpolators::LagrangeInterpolatorSettings >( 8 );
+    std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator;
+    std::map < double, Eigen::Vector6d > interpolatedState;
+    if( k == 0){
+        refMap = fullProblemResultForEachLeg;
+    }
+    else if ( k != 0){
+        int i = 0;
+
+        for (auto resultIterator : fullProblemResultForEachLeg){
+            std::map < double, Eigen::Vector6d > interpolatedState;
+            std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
+            std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
+            std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator =
+                    interpolators::createOneDimensionalInterpolator(
+                        refMap.at(i), interpolatorSettings );
+
+            for( auto timeIterator : resulPerLag)
+            {
+                interpolatedState[ timeIterator.first ] =
+                        benchmarkInterpolator->interpolate(
+                            timeIterator.first );
+
+            }
+            input_output::writeDataMapToTextFile(
+                        interpolatedState, "numericalResult" +
+                        std::to_string( resultIterator.first ) + "reference"+ std::to_string(k)+"Interpolated" + ".dat", outputPath );
+            i = i+1;
+        }
+    }
 
     // Measure time span between start & end
     auto time_span = static_cast<std::chrono::duration<double>>(end - start);
@@ -356,17 +431,17 @@ int main( )
             currentArcMiddleTime += ( trajectoryParameters.at( currentArc + 1 ) + trajectoryParameters.at( currentArc + 2 ) ) / 2.0;
 
         }
-        if( k == 2){
-        double bodyMass = bodyMapForPropagation[ "Spacecraft"]->getBodyMass();
-        double deltaV = deltaVVector.at(currentArc);
-        double Isp = 300;
-        double g0 = 9.80665;
-        double newBodyMass = bodyMass*exp(-deltaV/Isp/g0);
-        bodyMapForPropagation[ "Spacecraft" ]->setConstantBodyMass(newBodyMass);
-        //bodyMapForPropagation[ "Spacecraft" ]->updateMass();
-        double mass = bodyMapForPropagation[ "Spacecraft"]->getBodyMass();
-        std::cout<<"mass: "<<mass<<std::endl;
-        }
+//        if( k == 2){
+//        double bodyMass = bodyMapForPropagation[ "Spacecraft"]->getBodyMass();
+//        double deltaV = deltaVVector.at(currentArc);
+//        double Isp = 300;
+//        double g0 = 9.80665;
+//        double newBodyMass = bodyMass*exp(-deltaV/Isp/g0);
+//        bodyMapForPropagation[ "Spacecraft" ]->setConstantBodyMass(newBodyMass);
+//        //bodyMapForPropagation[ "Spacecraft" ]->updateMass();
+//        double mass = bodyMapForPropagation[ "Spacecraft"]->getBodyMass();
+//        std::cout<<"mass: "<<mass<<std::endl;
+//        }
 
     }
 

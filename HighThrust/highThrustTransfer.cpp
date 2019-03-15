@@ -1,4 +1,5 @@
-/*    Copyright (c) 2010-2018, Delft University of Technology
+
+/*    Copyright (c) 2010-2017, Delft University of Technology
  *    All rigths reserved
  *
  *    This file is part of the Tudat. Redistribution and use in source and
@@ -8,387 +9,1439 @@
  *    http://tudat.tudelft.nl/LICENSE.
  */
 
+#include "Tudat/SimulationSetup/PropagationSetup/propagationPatchedConicFullProblem.h"
+#include "Tudat/SimulationSetup/PropagationSetup/propagationLambertTargeterFullProblem.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/exportTrajectory.h"
+
+#include <Tudat/InputOutput/basicInputOutput.h>
+#include <tudatExampleApplications/satellitePropagatorExamples/SatellitePropagatorExamples/applicationOutput.h>
 #include <Tudat/SimulationSetup/tudatSimulationHeader.h>
-#include <Tudat/Astrodynamics/TrajectoryDesign/trajectory.h>
-#include <Tudat/SimulationSetup/PropagationSetup/propagationPatchedConicFullProblem.h>
-#include <Tudat/SimulationSetup/PropagationSetup/propagationLambertTargeterFullProblem.h>
 
-#include "../applicationOutput.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/captureLeg.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/departureLegMga.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/departureLegMga1DsmPosition.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/departureLegMga1DsmVelocity.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/planetTrajectory.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/swingbyLegMga.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/swingbyLegMga1DsmPosition.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/swingbyLegMga1DsmVelocity.h"
+#include "Tudat/Astrodynamics/TrajectoryDesign/trajectory.h"
 
-using namespace tudat;
-using namespace tudat::simulation_setup;
-using namespace tudat::propagators;
-using namespace tudat::numerical_integrators;
-using namespace tudat::orbital_element_conversions;
-using namespace tudat::basic_mathematics;
-using namespace tudat::gravitation;
-using namespace tudat::numerical_integrators;
-using namespace tudat::transfer_trajectories;
+namespace tudat
+{
 
-//! Function to directly setup a vector of acceleration maps for a patched conics trajectory.
-std::vector < basic_astrodynamics::AccelerationMap > getAccelerationModelsPerturbedPatchedConicsTrajectory(
-        const double numberOfLegs,
+namespace propagators
+{
+
+
+//! Function to get default minimum pericenter radii for a list of bodiess
+std::vector< double > getDefaultMinimumPericenterRadii( const std::vector< std::string >& bodyNames )
+{
+    std::vector< double > pericenterRadii;
+    for( unsigned int i = 0; i < bodyNames.size( ); i ++ )
+    {
+        if( bodyNames.at( i ) == "Mercury" )
+        {
+            pericenterRadii.push_back( 2639.7E3 );
+        }
+        else if( bodyNames.at( i ) == "Venus" )
+        {
+            pericenterRadii.push_back( 6251.8E3 );
+        }
+        else if( bodyNames.at( i ) == "Earth" )
+        {
+            pericenterRadii.push_back( 6578.1E3 );
+        }
+        else if( bodyNames.at( i ) == "Mars" )
+        {
+            pericenterRadii.push_back( 3596.2E3 );
+        }
+        else if( bodyNames.at( i ) == "Jupiter" )
+        {
+            pericenterRadii.push_back( 72000.0E3 );
+        }
+        else if( bodyNames.at( i ) == "Saturn" )
+        {
+            pericenterRadii.push_back( 61000.0E3 );
+        }
+        else if( bodyNames.at( i ) == "Uranus" )
+        {
+            pericenterRadii.push_back( 26000.0E3 );
+        }
+        else if( bodyNames.at( i ) == "Neptune" )
+        {
+            pericenterRadii.push_back( 25000.0E3 );
+        }
+        else if( bodyNames.at( i ) == "Pluto" )
+        {
+            pericenterRadii.push_back( 1395.0E3 );
+        }
+        else
+        {
+            throw std::runtime_error(
+                        "Error, could not recognize body " + bodyNames.at( i ) + " when getting minimum periapsis radius" );
+        }
+    }
+    return pericenterRadii;
+}
+
+
+//! Function to setup a body map corresponding to the assumptions of a patched conics trajectory,
+//! using default ephemerides for the central and transfer bodies.
+simulation_setup::NamedBodyMap setupBodyMapFromEphemeridesForPatchedConicsTrajectoryPO(
         const std::string& nameCentralBody,
         const std::string& nameBodyToPropagate,
-        const simulation_setup::NamedBodyMap& bodyMap,
-        const std::vector< std::string >& transferBodyOrder )
+        const std::vector< std::string >& nameTransferBodies)
 {
-    std::vector< basic_astrodynamics::AccelerationMap > accelerationMapsVector;
-    for (int i = 0 ; i < numberOfLegs ; i++)
+    spice_interface::loadStandardSpiceKernels( );
+
+    // Create central and transfer bodies.
+    std::vector< std::string > bodiesToCreate;
+    bodiesToCreate.push_back( nameCentralBody );
+    for ( unsigned int i = 0 ; i < nameTransferBodies.size( ) ; i ++ )
     {
-        SelectedAccelerationMap accelerationSettingsMap;
-
-        accelerationSettingsMap[ nameBodyToPropagate ][ nameCentralBody ].push_back(
-                    std::make_shared< simulation_setup::AccelerationSettings >(
-                        basic_astrodynamics::central_gravity ) );
-        accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i ) ].push_back(
-                    std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
-
-        if( i != numberOfLegs -1 )
-        {
-            accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i + 1 ) ].push_back(
-                        std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
-        }
-
-        accelerationMapsVector.push_back( createAccelerationModelsMap(
-                                              bodyMap, accelerationSettingsMap, { nameBodyToPropagate }, { nameCentralBody } ) );
+        bodiesToCreate.push_back( nameTransferBodies[ i ] );
     }
 
-    return accelerationMapsVector;
+
+    std::map< std::string, std::shared_ptr< simulation_setup::BodySettings > > bodySettings =
+            simulation_setup::getDefaultBodySettings( bodiesToCreate );
+
+    std::string frameOrigin = "SSB";
+    std::string frameOrientation = "ECLIPJ2000";
+
+
+    // Define central body ephemeris settings.
+    bodySettings[ nameCentralBody ]->ephemerisSettings = std::make_shared< simulation_setup::ConstantEphemerisSettings >(
+                ( Eigen::Vector6d( ) << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ).finished( ), frameOrigin, frameOrientation );
+
+    bodySettings[ nameCentralBody ]->ephemerisSettings->resetFrameOrientation( frameOrientation );
+    bodySettings[ nameCentralBody ]->rotationModelSettings->resetOriginalFrame( frameOrientation );
+
+
+    // Create body map.
+    simulation_setup::NamedBodyMap bodyMap = createBodies( bodySettings );
+
+
+    // Define body to propagate.
+    bodyMap[ nameBodyToPropagate ] = std::make_shared< simulation_setup::Body >( );
+    bodyMap[ nameBodyToPropagate ]->setEphemeris( std::make_shared< ephemerides::TabulatedCartesianEphemeris< > >(
+                                                      std::shared_ptr< interpolators::OneDimensionalInterpolator
+                                                      < double, Eigen::Vector6d > >( ), frameOrigin, frameOrientation ) );
+
+
+    setGlobalFrameBodyEphemerides( bodyMap, frameOrigin, frameOrientation );
+
+
+    return bodyMap;
+}
+
+
+
+//! Function to setup a body map corresponding to the assumptions of the patched conics trajectory,
+//! the ephemerides of the transfer bodies being provided as inputs.
+simulation_setup::NamedBodyMap setupBodyMapFromUserDefinedEphemeridesForPatchedConicsTrajectory(
+        const std::string& nameCentralBody,
+        const std::string& nameBodyToPropagate,
+        const std::vector< std::string >& nameTransferBodies,
+        const std::vector< ephemerides::EphemerisPointer >& ephemerisVectorTransferBodies,
+        const std::vector< double >& gravitationalParametersTransferBodies,
+        const std::string& frameOrientation )
+{
+
+    spice_interface::loadStandardSpiceKernels( );
+
+
+    // Create central body object.
+    std::vector< std::string > bodiesToCreate;
+    bodiesToCreate.push_back( nameCentralBody );
+
+    std::map< std::string, std::shared_ptr< simulation_setup::BodySettings > > bodySettings =
+            simulation_setup::getDefaultBodySettings( bodiesToCreate );
+
+    std::string frameOrigin = "SSB";
+
+    // Define central body ephemeris settings.
+    bodySettings[ nameCentralBody ]->ephemerisSettings = std::make_shared< simulation_setup::ConstantEphemerisSettings >(
+                ( Eigen::Vector6d( ) << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ).finished( ), frameOrigin, frameOrientation );
+
+    bodySettings[ nameCentralBody ]->ephemerisSettings->resetFrameOrientation( frameOrientation );
+    bodySettings[ nameCentralBody ]->rotationModelSettings->resetOriginalFrame( frameOrientation );
+
+
+    // Create body map.
+    simulation_setup::NamedBodyMap bodyMap = createBodies( bodySettings );
+
+    bodyMap[ nameBodyToPropagate ] = std::make_shared< simulation_setup::Body >( );
+    bodyMap[ nameBodyToPropagate ]->setEphemeris( std::make_shared< ephemerides::TabulatedCartesianEphemeris< > >(
+                                                      std::shared_ptr< interpolators::OneDimensionalInterpolator
+                                                      < double, Eigen::Vector6d > >( ), frameOrigin, frameOrientation ) );
+
+
+    // Define ephemeris and gravity field for the transfer bodies.
+    for ( unsigned int i = 0 ; i < nameTransferBodies.size( ) ; i ++ )
+    {
+
+        bodyMap[ nameTransferBodies[ i ] ] = std::make_shared< simulation_setup::Body >( );
+        bodyMap[ nameTransferBodies[ i ] ]->setEphemeris( ephemerisVectorTransferBodies[ i ] );
+        bodyMap[ nameTransferBodies[ i ] ]->setGravityFieldModel( simulation_setup::createGravityFieldModel(
+                                                                      std::make_shared< simulation_setup::CentralGravityFieldSettings >( gravitationalParametersTransferBodies[ i ] ),
+                                                                      nameTransferBodies[ i ] ) );
+    }
+
+    setGlobalFrameBodyEphemerides( bodyMap, frameOrigin, frameOrientation );
+
+    return bodyMap;
 
 }
 
-/*!
- *   This function computes a patched conic trajectory with a given set of flyby bodies, minimum periapsis distances. The
- *   order of bodies is defined as Earth-Venus-X-Y-Jupiter, with X and Y user-defined. A Trajectory object is created that
- *   computes the required Delta V at arrival and at each flyby (no DSMs are considered). The departure Delta V is not included
- *   in the final Delta V
- *
- *   Subsequently, the function fullPropagationPatchedConicsTrajectory is called, which propagates the problem
- *   numerically in the following way:
- *
- *   - The patched conic (consisting of a set of Lambert targeters), is reconstructed, and the output (vehicle state) at regular
- *     intervals is saved.
- *   - Starting at the midpoint (in time) of each transfer leg, the spacecraft state is numerically propagated using acceleration/
- *     environment settings that may be defined by the user. The propagation is done from the midpoint forwards, and backwards,
- *     to obtain the state history of the full leg.
- *
- *   In the code, as given to you, the dynamical model used in the numerical propagation is not fully consistent with that of the
- *   patched conic method. In addition to the point mass gravity attraction by the Sun (Sun fixed at the origin), the perturbations
- *   of the arrival and departure planet are also taken into account (as point-mass gravities)
- *
- *   Key outputs (per leg):
- *
- *   lambertTargeterResultForEachLeg: a list of the state history of the spacecraft (per leg) according to the patched conic
- *      method
- *   fullProblemResultForEachLeg: a list of the state history of the spacecraft (per leg) as produced by the numerical propagation
- *
- *   Input parameters:
- *
- *   trajectoryIndependentVariables: A vector defining the start time (first entry, in seconds since J2000) and duration of all 4
- *      legs (second, third, fourth and fifth entries respectively). For technical reasons, the final (in this case sixth) entry
- *      of this vector should always be 0.
- *   transferCase: Integer defining which entry of the transferCaseNames vector is to be used (e.g. which bodies X and Y are
- *   used for the 3rd and 4th body)
- */
-int main( )
+
+
+//! Function to directly setup a vector of acceleration maps for a patched conics trajectory.
+std::vector < basic_astrodynamics::AccelerationMap > setupAccelerationMapPatchedConicsTrajectory(
+        const double numberOfLegs,
+        const std::string& nameCentralBody,
+        const std::string& nameBodyToPropagate,
+        const simulation_setup::NamedBodyMap& bodyMap )
 {
-    // Load Spice kernels.
-    spice_interface::loadStandardSpiceKernels( );
+    std::vector< basic_astrodynamics::AccelerationMap > accelerationMapsVector;
 
-    std::string outputPath = tudat_applications::getOutputPath( "HighThrustBench" );
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////        TRANSFER SETTINGS                 //////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // Define different cases for 3rd and 4th body
-    std::vector< std::string > transferCases = { "EVEEJ", "EVVEJ",  "EVEVJ", "EVVMJ", "EVEMJ", "EVMMJ", "EVMVJ"  };
-    std::vector< std::pair< std::string, std::string > > transferCaseNames =
-    { { "Earth", "Earth" }, { "Venus", "Earth" }, { "Earth", "Venus" }, { "Venus", "Mars" }, { "Earth", "Mars" },
-      { "Mars", "Mars" }, { "Mars", "Venus" } };
-
-    // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    std::vector< double > trajectoryParameters =
-    { -5185.040933880841,	 284.508757767517, 	 193.7914543558609,	 282.9403211987581,	 767.7274155863713,	6 };
-
-    int transferCase = trajectoryParameters.at( 5 );
-
-    // Set body order (no DSM) for current settings
-    std::vector< std::string > transferBodyOrder =
-    { "Earth", "Venus", transferCaseNames.at( transferCase ).first, transferCaseNames.at( transferCase ).second, "Jupiter" };
-    std::vector< TransferLegType > transferLegTypes = { mga_Departure, mga_Swingby, mga_Swingby, mga_Swingby, capture };
-
-    // Define settings for capture at target planet
-    double captureSemiMajorAxis = 1.0895e8 / 0.02;
-    double captureEccentricity = 0.98;
-    std::vector< double > departureCaptureSemiMajorAxes = { TUDAT_NAN, captureSemiMajorAxis };
-    std::vector< double > departureCaptureEccentricities = { TUDAT_NAN, captureEccentricity };
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////        SETUP SOLAR SYSTEM BODIES            ///////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // Create body map
-    NamedBodyMap bodyMapForPatchedConic = setupBodyMapFromEphemeridesForPatchedConicsTrajectory(
-                "Sun", "Spacecraft", transferBodyOrder );
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////             CREATE SPACECRAFT            //////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // Create spacecraft object.
-    bodyMapForPatchedConic[ "Spacecraft" ] = std::make_shared< simulation_setup::Body >( );
-    bodyMapForPatchedConic[ "Spacecraft" ]->setConstantBodyMass( 400.0 );
-
-    // Finalize body creation.
-    setGlobalFrameBodyEphemerides( bodyMapForPatchedConic, "SSB", "ECLIPJ2000" );
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////////////////             CREATE PATCHED CONIC SEMI-ANALYTICAL TRAJECTORY            ///////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // Get list of minimum flyby periapsis radii
-    std::vector< double > minimumPericenterRadii = getDefaultMinimumPericenterRadii(
-                transferBodyOrder );
-
-    std::vector< double > trajectoryIndependentVariables;
-    for( unsigned int i = 0; i < trajectoryParameters.size( ) - 1; i++ )
+    for( int i = 0 ; i < numberOfLegs ; i ++ )
     {
-        trajectoryIndependentVariables.push_back( trajectoryParameters.at( i ) * physical_constants::JULIAN_DAY );
+        accelerationMapsVector.push_back( setupAccelerationMapLambertTargeter(nameCentralBody, nameBodyToPropagate, bodyMap) );
     }
 
-    // Add entry for interface consistency
-    trajectoryIndependentVariables.push_back( TUDAT_NAN );
-
-    // Create patched conic calculation object (no numerical propagation; departure Delta V not included)
-    transfer_trajectories::Trajectory trajectory = createTransferTrajectoryObject(
-                bodyMapForPatchedConic, transferBodyOrder, "Sun", transferLegTypes, trajectoryIndependentVariables,
-                minimumPericenterRadii, false, TUDAT_NAN, TUDAT_NAN, true,
-                captureSemiMajorAxis, captureEccentricity );
+    return accelerationMapsVector;
+}
 
 
-    // Retrieve total Delta V values
+
+//! Function to create the trajectory from the body map.
+transfer_trajectories::Trajectory createTransferTrajectoryObject(
+        const simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< std::string >& transferBodyOrder,
+        const std::string& centralBody,
+        const std::vector< transfer_trajectories::TransferLegType >& transferLegTypes,
+        const std::vector< double > trajectoryIndependentVariables,
+        const std::vector< double > minimumPericenterRadii,
+        const bool includeDepartureDeltaV,
+        const double departureSemiMajorAxis,
+        const double departureEccentricity,
+        const bool includeArrivalDeltaV,
+        const double arrivalSemiMajorAxis,
+        const double arrivalEccentricity )
+{
+    int numberOfLegs = transferBodyOrder.size( );
+
+    std::vector< ephemerides::EphemerisPointer > ephemerisVector;
+    Eigen::VectorXd gravitationalParameterVector = Eigen::VectorXd::Zero( transferBodyOrder.size( ) );
+
+    for( unsigned int i = 0; i < transferBodyOrder.size( ); i ++ )
+    {
+        if( bodyMap.count( transferBodyOrder.at( i ) ) != 0 )
+        {
+            ephemerisVector.push_back( bodyMap.at( transferBodyOrder.at( i ) )->getEphemeris( ) );
+            gravitationalParameterVector( i ) =
+                    bodyMap.at( transferBodyOrder.at( i ) )->getGravityFieldModel( )->getGravitationalParameter( );
+
+        }
+    }
+
+    double centralBodyGravitationalParameter = TUDAT_NAN;
+    if( bodyMap.count( centralBody ) != 0 )
+    {
+        centralBodyGravitationalParameter = bodyMap.at( centralBody )->getGravityFieldModel( )->getGravitationalParameter( );
+    }
+    else
+    {
+        throw std::runtime_error( "Error, central body " + centralBody + " not found when creating transfer trajectory object" );
+    }
+
+    Eigen::VectorXd semiMajorAxesVector =
+            ( Eigen::VectorXd( 2 ) << departureSemiMajorAxis, arrivalSemiMajorAxis ).finished( );
+    Eigen::VectorXd eccentricityVector =
+            ( Eigen::VectorXd( 2 ) << departureEccentricity, arrivalEccentricity ).finished( );
+
+    return transfer_trajectories::Trajectory(
+                numberOfLegs, transferLegTypes, ephemerisVector, gravitationalParameterVector,
+                utilities::convertStlVectorToEigenVector( trajectoryIndependentVariables ), centralBodyGravitationalParameter,
+                utilities::convertStlVectorToEigenVector( minimumPericenterRadii ),
+                semiMajorAxesVector, eccentricityVector, includeDepartureDeltaV, includeArrivalDeltaV );
+
+}
+
+//! Function to both calculate a patched conics leg without DSM and propagate the full dynamics problem.
+void propagateMgaWithoutDsmAndFullProblem(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< std::string > departureAndArrivalBodies,
+        const std::string centralBody,
+        const Eigen::Vector3d cartesianPositionAtDeparture,
+        const Eigen::Vector3d cartesianPositionAtArrival,
+        const double initialTime,
+        const double timeOfFlight,
+        const std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > propagatorSettings,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings,
+        std::map< double, Eigen::Vector6d >& patchedConicsResult,
+        std::map< double, Eigen::Vector6d >& fullProblemResult,
+        std::map< double, Eigen::VectorXd >& dependentVariableResultCurrentLeg )
+{
+    integratorSettings->initialTime_ = initialTime;
+
+    // Compute the difference in state between the full problem and the Lambert targeter solution for the current leg.
+    propagators::propagateLambertTargeterAndFullProblem(
+                timeOfFlight, initialTime, bodyMap, centralBody,
+                propagatorSettings, integratorSettings,
+                patchedConicsResult, fullProblemResult, dependentVariableResultCurrentLeg, departureAndArrivalBodies,
+                bodyMap[ centralBody ]->getGravityFieldModel( )->getGravitationalParameter( ) ,
+                cartesianPositionAtDeparture, cartesianPositionAtArrival );
+}
+
+
+
+//! Function to both calculate a patched conics leg including a DSM and propagate the corresponding full dynamics problem.
+void propagateMga1DsmVelocityAndFullProblem(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< std::string > departureAndArrivalBodies,
+        const std::string& dsm,
+        const std::string& centralBody,
+        const Eigen::Vector3d cartesianPositionAtDeparture,
+        const Eigen::Vector3d cartesianPositionDSM,
+        const Eigen::Vector3d cartesianPositionAtArrival,
+        const double initialTime,
+        const double timeDsm,
+        const double timeArrival,
+        const transfer_trajectories::TransferLegType& legType,
+        const std::vector< double >& trajectoryVariableVector,
+        const double semiMajorAxis,
+        const double eccentricity,
+        Eigen::Vector3d& velocityAfterDeparture,
+        Eigen::Vector3d& velocityBeforeArrival,
+        const std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > propagatorSettingsBeforeDsm,
+        const std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > propagatorSettingsAfterDsm,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings,
+        std::map< double, Eigen::Vector6d >& patchedConicsResultFromDepartureToDsm,
+        std::map< double, Eigen::Vector6d >& fullProblemResultFromDepartureToDsm,
+        std::map< double, Eigen::VectorXd >& dependentVariablesFromDepartureToDsm,
+        std::map< double, Eigen::Vector6d >& patchedConicsResultFromDsmToArrival,
+        std::map< double, Eigen::Vector6d >& fullProblemResultFromDsmToArrival,
+        std::map< double, Eigen::VectorXd >& dependentVariablesFromDsmToArrival )
+{
+
+    if( legType == transfer_trajectories::mga1DsmVelocity_Departure )
+    {
+        std::shared_ptr< transfer_trajectories::DepartureLegMga1DsmVelocity > departureLegMga1DsmVelocity =
+                std::make_shared< transfer_trajectories::DepartureLegMga1DsmVelocity >(
+                    cartesianPositionAtDeparture, cartesianPositionAtArrival, timeArrival - initialTime,
+                    bodyMap[ departureAndArrivalBodies[ 0 ] ]->getEphemeris( )->getCartesianState( initialTime ).segment( 3, 3 ),
+                bodyMap[ centralBody ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                bodyMap[ departureAndArrivalBodies[ 0 ] ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                semiMajorAxis, eccentricity,
+                trajectoryVariableVector[ 0 ],
+                trajectoryVariableVector[ 1 ],
+                trajectoryVariableVector[ 2 ],
+                trajectoryVariableVector[ 3 ], true  );
+
+        double deltaV;
+        Eigen::Vector3d departureBodyPosition;
+        Eigen::Vector3d departureBodyVelocity;
+
+        // Update value of velocity before arrival.
+        departureLegMga1DsmVelocity->calculateLeg( velocityBeforeArrival, deltaV );
+
+        // Update value of velocity after departure.
+        departureLegMga1DsmVelocity->returnDepartureVariables( departureBodyPosition, departureBodyVelocity, velocityAfterDeparture );
+    }
+    else if( legType == transfer_trajectories::mga1DsmVelocity_Swingby )
+    {
+        std::shared_ptr< Eigen::Vector3d > pointerToVelocityBeforeArrival = std::make_shared< Eigen::Vector3d >( velocityBeforeArrival );
+
+        std::shared_ptr< transfer_trajectories::SwingbyLegMga1DsmVelocity > swingbyLegMga1DsmVelocity =
+                std::make_shared< transfer_trajectories::SwingbyLegMga1DsmVelocity >(
+                    cartesianPositionAtDeparture, cartesianPositionAtArrival, timeArrival - initialTime,
+                    bodyMap[ departureAndArrivalBodies[ 0 ] ]->getEphemeris( )->getCartesianState( initialTime ).segment( 3, 3 ),
+                bodyMap[ centralBody ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                bodyMap[ departureAndArrivalBodies[ 0 ] ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                pointerToVelocityBeforeArrival,
+                trajectoryVariableVector[ 0 ],
+                trajectoryVariableVector[ 1 ],
+                trajectoryVariableVector[ 2 ],
+                trajectoryVariableVector[ 3 ]);
+
+        double deltaV;
+        Eigen::Vector3d departureBodyPosition;
+        Eigen::Vector3d departureBodyVelocity;
+
+        // Update value of velocity before arrival.
+        swingbyLegMga1DsmVelocity->calculateLeg( velocityBeforeArrival, deltaV );
+
+        // Update value of velocity after departure.
+        swingbyLegMga1DsmVelocity->returnDepartureVariables( departureBodyPosition, departureBodyVelocity, velocityAfterDeparture );
+    }
+
+
+    // First part of the leg: propagation of the state from departure body to DSM location.
+    integratorSettings->initialTime_ = initialTime;
+
+    std::vector< std::string >legDepartureAndArrival;
+    legDepartureAndArrival.push_back( departureAndArrivalBodies[ 0 ] );
+    legDepartureAndArrival.push_back( dsm );
+
+    propagateKeplerianOrbitLegAndFullProblem(
+                timeDsm - initialTime, initialTime, bodyMap, centralBody,
+                legDepartureAndArrival, velocityAfterDeparture, propagatorSettingsBeforeDsm, integratorSettings,
+                patchedConicsResultFromDepartureToDsm, fullProblemResultFromDepartureToDsm, dependentVariablesFromDepartureToDsm,
+                bodyMap[ centralBody ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                cartesianPositionAtDeparture );
+
+    // Second part of the leg: Lambert targeter from DSM location to arrival body.
+    legDepartureAndArrival.clear( );
+    legDepartureAndArrival.push_back( dsm );
+    legDepartureAndArrival.push_back( departureAndArrivalBodies[ 1 ] );
+
+    integratorSettings->initialTime_ = timeDsm;
+
+    propagateLambertTargeterAndFullProblem( timeArrival - timeDsm, timeDsm, bodyMap, centralBody,
+                                            propagatorSettingsAfterDsm, integratorSettings,
+                                            patchedConicsResultFromDsmToArrival, fullProblemResultFromDsmToArrival,
+                                            dependentVariablesFromDsmToArrival, legDepartureAndArrival,
+                                            bodyMap[ centralBody]->getGravityFieldModel( )->getGravitationalParameter( ),
+                                            cartesianPositionDSM, cartesianPositionAtArrival );
+
+}
+
+
+
+//! Function to both calculate a patched conics leg including a DSM and propagate the corresponding full dynamics problem.
+void propagateMga1DsmPositionAndFullProblem(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< std::string > departureAndArrivalBodies,
+        const std::string& dsm,
+        const std::string& centralBody,
+        const Eigen::Vector3d cartesianPositionAtDeparture,
+        const Eigen::Vector3d cartesianPositionDSM,
+        const Eigen::Vector3d cartesianPositionAtArrival,
+        const double initialTime,
+        const double timeDsm,
+        const double timeArrival,
+        const transfer_trajectories::TransferLegType& legType,
+        const std::vector< double >& trajectoryVariableVector,
+        const double minimumPericenterRadius,
+        const double semiMajorAxis,
+        const double eccentricity,
+        Eigen::Vector3d& velocityAfterDeparture,
+        Eigen::Vector3d& velocityBeforeArrival,
+        const std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > propagatorSettingsBeforeDsm,
+        const std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > propagatorSettingsAfterDsm,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings,
+        std::map< double, Eigen::Vector6d >& patchedConicsResultFromDepartureToDsm,
+        std::map< double, Eigen::Vector6d >& fullProblemResultFromDepartureToDsm,
+        std::map< double, Eigen::VectorXd >& dependentVariablesFromDepartureToDsm,
+        std::map< double, Eigen::Vector6d >& patchedConicsResultFromDsmToArrival,
+        std::map< double, Eigen::Vector6d >& fullProblemResultFromDsmToArrival,
+        std::map< double, Eigen::VectorXd >& dependentVariablesFromDsmToArrival )
+{
+    if( legType == transfer_trajectories::mga1DsmPosition_Departure )
+    {
+
+        std::shared_ptr< transfer_trajectories::DepartureLegMga1DsmPosition > departureLegMga1DsmPosition =
+                std::make_shared< transfer_trajectories::DepartureLegMga1DsmPosition >(
+                    cartesianPositionAtDeparture, cartesianPositionAtArrival, timeArrival - initialTime,
+                    bodyMap[ departureAndArrivalBodies[ 0 ] ]->getEphemeris( )->getCartesianState( initialTime ).segment( 3, 3 ),
+                bodyMap[ centralBody ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                bodyMap[ departureAndArrivalBodies[ 0 ] ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                semiMajorAxis, eccentricity,
+                trajectoryVariableVector[ 0 ],
+                trajectoryVariableVector[ 1 ],
+                trajectoryVariableVector[ 2 ],
+                trajectoryVariableVector[ 3 ], true  );
+
+        double deltaV;
+        Eigen::Vector3d departureBodyPosition;
+        Eigen::Vector3d departureBodyVelocity;
+
+        // Update value of velocity before arrival.
+        departureLegMga1DsmPosition->calculateLeg( velocityBeforeArrival, deltaV );
+
+        // Update value of velocity after departure.
+        departureLegMga1DsmPosition->returnDepartureVariables( departureBodyPosition, departureBodyVelocity, velocityAfterDeparture );
+
+    }
+
+    if( legType == transfer_trajectories::mga1DsmPosition_Swingby )
+    {
+
+        std::shared_ptr< Eigen::Vector3d > pointerToVelocityBeforeArrival = std::make_shared< Eigen::Vector3d >( velocityBeforeArrival );
+
+        std::shared_ptr< transfer_trajectories::MissionLeg > missionLeg;
+        std::shared_ptr< transfer_trajectories::SwingbyLegMga1DsmPosition > swingbyLegMga1DsmPosition =
+                std::make_shared< transfer_trajectories::SwingbyLegMga1DsmPosition >(
+                    cartesianPositionAtDeparture, cartesianPositionAtArrival, timeArrival - initialTime,
+                    bodyMap[ departureAndArrivalBodies[ 0 ] ]->getEphemeris( )->getCartesianState( initialTime ).segment( 3, 3 ),
+                bodyMap[ centralBody ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                bodyMap[ departureAndArrivalBodies[ 0 ] ]->getGravityFieldModel( )->getGravitationalParameter( ),
+                pointerToVelocityBeforeArrival, minimumPericenterRadius,
+                trajectoryVariableVector[ 0 ],
+                trajectoryVariableVector[ 1 ],
+                trajectoryVariableVector[ 2 ],
+                trajectoryVariableVector[ 3 ] );
+
+        double deltaV;
+        Eigen::Vector3d departureBodyPosition;
+        Eigen::Vector3d departureBodyVelocity;
+
+        // Update value of velocity before arrival.
+        swingbyLegMga1DsmPosition->calculateLeg( velocityBeforeArrival, deltaV );
+
+        // Update value of velocity after departure.
+        swingbyLegMga1DsmPosition->returnDepartureVariables( departureBodyPosition, departureBodyVelocity, velocityAfterDeparture );
+
+
+    }
+
+
+
+    // First part of the leg: Lambert targeter from departure body to DSM location.
+
+    integratorSettings->initialTime_ = initialTime;
+
+    std::vector< std::string >legDepartureAndArrival;
+    legDepartureAndArrival.push_back( departureAndArrivalBodies[ 0 ] );
+    legDepartureAndArrival.push_back( dsm );
+
+    propagateLambertTargeterAndFullProblem( timeDsm - initialTime, initialTime, bodyMap, centralBody,
+                                            propagatorSettingsBeforeDsm, integratorSettings, patchedConicsResultFromDepartureToDsm,
+                                            fullProblemResultFromDepartureToDsm, dependentVariablesFromDepartureToDsm, legDepartureAndArrival,
+                                            bodyMap[ centralBody]->getGravityFieldModel( )->getGravitationalParameter( ),
+                                            cartesianPositionAtDeparture, cartesianPositionDSM );
+
+
+    // Second part of the leg: Lambert targeter from DSM to arrival body.
+
+    legDepartureAndArrival.clear( );
+    legDepartureAndArrival.push_back( dsm );
+    legDepartureAndArrival.push_back( departureAndArrivalBodies[ 1 ] );
+
+    integratorSettings->initialTime_ = timeDsm;
+
+    propagateLambertTargeterAndFullProblem( timeArrival - timeDsm, timeDsm, bodyMap, centralBody,
+                                            propagatorSettingsAfterDsm, integratorSettings, patchedConicsResultFromDsmToArrival,
+                                            fullProblemResultFromDsmToArrival, dependentVariablesFromDsmToArrival, legDepartureAndArrival,
+                                            bodyMap[ centralBody]->getGravityFieldModel( )->getGravitationalParameter( ),
+                                            cartesianPositionDSM, cartesianPositionAtArrival );
+
+}
+
+
+
+//! Function to propagate the motion of a body over a trajectory leg, both along a keplerian orbit and in a full dynamics problem.
+void propagateKeplerianOrbitLegAndFullProblem(
+        const double timeOfFlight,
+        const double initialTime,
+        const simulation_setup::NamedBodyMap& bodyMap,
+        const std::string& centralBody,
+        const std::vector<std::string>& departureAndArrivalBodies,
+        const Eigen::Vector3d& velocityAfterDeparture,
+        const std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > propagatorSettings,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > > integratorSettings,
+        std::map< double, Eigen::Vector6d >& keplerianOrbitResult,
+        std::map< double, Eigen::Vector6d >& fullProblemResult,
+        std::map< double, Eigen::VectorXd >& dependentVariables,
+        const double centralBodyGravitationalParameter,
+        const Eigen::Vector3d& cartesianPositionAtDeparture )
+{
+    // Clear output maps
+    keplerianOrbitResult.clear( );
+    fullProblemResult.clear( );
+    dependentVariables.clear( );
+
+    // Retrieve the gravitational parameter of the relevant bodies.
+    double gravitationalParameterCentralBody = ( centralBodyGravitationalParameter == centralBodyGravitationalParameter ) ?
+                centralBodyGravitationalParameter :
+                bodyMap.at( centralBody )->getGravityFieldModel( )->getGravitationalParameter( );
+
+    // Get halved value of the time of flight, later used as initial time for the propagation.
+    double halvedTimeOfFlight = timeOfFlight / 2.0;
+
+    // Time at the end of the transfer
+    double finalTime = initialTime + timeOfFlight;
+
+    // Retrieve positions of departure and arrival bodies from ephemerides
+    Eigen::Vector3d cartesianPositionAtDepartureForPatchedConics;
+    if(  cartesianPositionAtDeparture != cartesianPositionAtDeparture )
+    {
+        // Cartesian position at departure
+        if(  bodyMap.at( departureAndArrivalBodies.at( 0 ) )->getEphemeris( ) == nullptr)
+        {
+            throw std::runtime_error( "Ephemeris not defined for departure body." );
+        }
+        else
+        {
+            Eigen::Vector6d cartesianStateDepartureBody =
+                    bodyMap.at( departureAndArrivalBodies.at( 0 ) )->getEphemeris( )->getCartesianState( initialTime );
+            cartesianPositionAtDepartureForPatchedConics = cartesianStateDepartureBody.segment( 0, 3 );
+        }
+    }
+    else
+    {
+        cartesianPositionAtDepartureForPatchedConics = cartesianPositionAtDeparture;
+    }
+
+
+    // Cartesian state at departure.
+    Eigen::Vector6d cartesianStateAtDeparture;
+    cartesianStateAtDeparture.segment( 0, 3 ) = cartesianPositionAtDepartureForPatchedConics;
+    cartesianStateAtDeparture.segment( 3, 3 ) = velocityAfterDeparture;
+
+
+    // Convert into keplerian elements
+    Eigen::Vector6d keplerianStateAtDeparture = orbital_element_conversions::convertCartesianToKeplerianElements(
+                cartesianStateAtDeparture, gravitationalParameterCentralBody );
+
+    // Propagate the keplerian elements until half of the time of flight.
+    Eigen::Vector6d keplerianStateAtHalvedTimeOfFlight = orbital_element_conversions::propagateKeplerOrbit( keplerianStateAtDeparture,
+                                                                                                            halvedTimeOfFlight, gravitationalParameterCentralBody );
+
+    // Convert the keplerian elements back into Cartesian elements.
+    Eigen::Vector6d initialStatePropagation = orbital_element_conversions::convertKeplerianToCartesianElements(
+                keplerianStateAtHalvedTimeOfFlight, gravitationalParameterCentralBody );
+
+
+
+
+
+    Eigen::Vector6d cartesianStateKeplerianOrbit;
+
+
+    // Define forward propagator settings variables.
+    integratorSettings->initialTime_ = initialTime + halvedTimeOfFlight;
+
+    // Define forward propagation settings
+    std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > propagatorSettingsForwardPropagation;
+    std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > propagatorSettingsBackwardPropagation;
+
+    propagatorSettingsForwardPropagation = propagatorSettings.second;
+    propagatorSettingsForwardPropagation->resetInitialStates( initialStatePropagation );
+
+    propagatorSettingsBackwardPropagation = propagatorSettings.first;
+    propagatorSettingsBackwardPropagation->resetInitialStates( initialStatePropagation );
+
+
+    // Perform forward propagation.
+    propagators::SingleArcDynamicsSimulator< > dynamicsSimulatorIntegrationForwards(
+                bodyMap, integratorSettings, propagatorSettingsForwardPropagation );
+    std::map< double, Eigen::VectorXd > stateHistoryFullProblemForwardPropagation = dynamicsSimulatorIntegrationForwards.
+            getEquationsOfMotionNumericalSolution( );
+    std::map< double, Eigen::VectorXd > dependentVariableHistoryFullProblemForwardPropagation =
+            dynamicsSimulatorIntegrationForwards.getDependentVariableHistory( );
+
+    // Calculate the difference between the full problem and the Keplerian orbit solution along the forward propagation direction.
+    for( std::map< double, Eigen::VectorXd >::iterator itr = stateHistoryFullProblemForwardPropagation.begin( );
+         itr != stateHistoryFullProblemForwardPropagation.end( ); itr++ )
+    {
+        cartesianStateKeplerianOrbit = orbital_element_conversions::convertKeplerianToCartesianElements(
+                    orbital_element_conversions::propagateKeplerOrbit(
+                        orbital_element_conversions::convertCartesianToKeplerianElements(
+                            initialStatePropagation, gravitationalParameterCentralBody ),
+                        itr->first - ( initialTime + halvedTimeOfFlight ),
+                        gravitationalParameterCentralBody ), gravitationalParameterCentralBody );
+        keplerianOrbitResult[ itr->first ] = cartesianStateKeplerianOrbit;
+        fullProblemResult[ itr->first ] = itr->second;
+        dependentVariables[ itr->first ] = dependentVariableHistoryFullProblemForwardPropagation[ itr->first ];
+    }
+
+    // Define backward propagator settings variables.
+    integratorSettings->initialTimeStep_ = -integratorSettings->initialTimeStep_;
+    integratorSettings->initialTime_ = initialTime + halvedTimeOfFlight;
+
+    // Perform the backward propagation.
+    propagators::SingleArcDynamicsSimulator< > dynamicsSimulatorIntegrationBackwards(bodyMap, integratorSettings, propagatorSettingsBackwardPropagation );
+    std::map< double, Eigen::VectorXd > stateHistoryFullProblemBackwardPropagation =
+            dynamicsSimulatorIntegrationBackwards.getEquationsOfMotionNumericalSolution( );
+    std::map< double, Eigen::VectorXd > dependentVariableHistoryFullProblemBackwardsPropagation =
+            dynamicsSimulatorIntegrationBackwards.getDependentVariableHistory( );
+
+    // Calculate the difference between the full problem and the keplerian orbit solution along the backward propagation direction.
+    for( std::map< double, Eigen::VectorXd >::iterator itr = stateHistoryFullProblemBackwardPropagation.begin( );
+         itr != stateHistoryFullProblemBackwardPropagation.end( ); itr++ )
+    {
+        cartesianStateKeplerianOrbit = orbital_element_conversions::convertKeplerianToCartesianElements(
+                    orbital_element_conversions::propagateKeplerOrbit(
+                        orbital_element_conversions::convertCartesianToKeplerianElements(
+                            initialStatePropagation, gravitationalParameterCentralBody ),
+                        - ( initialTime + halvedTimeOfFlight) + itr->first,
+                        gravitationalParameterCentralBody ), gravitationalParameterCentralBody );
+
+        keplerianOrbitResult[ itr->first ] = cartesianStateKeplerianOrbit;
+        fullProblemResult[ itr->first ] = itr->second;
+        dependentVariables[ itr->first ] = dependentVariableHistoryFullProblemBackwardsPropagation[ itr->first ];
+
+    }
+
+    // Reset initial integrator settings
+    integratorSettings->initialTimeStep_ = -integratorSettings->initialTimeStep_;
+}
+
+std::shared_ptr< propagators::PropagationTerminationSettings > getSingleLegPartSphereOfInfluenceTerminationSettings(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::string& bodyToPropagate,
+        const std::string& centralBody,
+        const std::string& departureBody,
+        const std::string& arrivalBody,
+        const double initialTimeCurrentLeg,
+        const double finalTimeCurrentLeg,
+        const bool useBackwardLegToDepartureBody,
+        const double terminationDistanceScaler )
+{
+    // Retrieve positions of departure and arrival bodies.
+    Eigen::Vector3d cartesianPositionAtDeparture, cartesianPositionAtArrival;
+
+    // Cartesian state at departure
+    if(  bodyMap.at( departureBody )->getEphemeris( ) == nullptr )
+    {
+        throw std::runtime_error( "Ephemeris not defined for departure body." );
+    }
+    else
+    {
+        Eigen::Vector6d cartesianStateDepartureBody =
+                bodyMap.at( departureBody )->getEphemeris( )->getCartesianState( initialTimeCurrentLeg);
+        cartesianPositionAtDeparture = cartesianStateDepartureBody.segment( 0, 3 );
+    }
+
+    // Cartesian state at arrival
+    if(  bodyMap.at( arrivalBody )->getEphemeris( ) == nullptr)
+    {
+        throw std::runtime_error( "Ephemeris not defined for arrival body." );
+    }
+    else
+    {
+        Eigen::Vector6d cartesianStateArrivalBody =
+                bodyMap.at( arrivalBody )->getEphemeris( )->getCartesianState( finalTimeCurrentLeg );
+        cartesianPositionAtArrival =  cartesianStateArrivalBody.segment( 0, 3 );
+    }
+
+
+    // Retrieve the gravitational parameter of the different bodies.
+    double gravitationalParameterCentralBody =
+            bodyMap.at( centralBody )->getGravityFieldModel( )->getGravitationalParameter( );
+    double gravitationalParameterDepartureBody =
+            bodyMap.at( departureBody )->getGravityFieldModel( )->getGravitationalParameter( );
+    double gravitationalParameterArrivalBody =
+            bodyMap.at( arrivalBody )->getGravityFieldModel( )->getGravitationalParameter( );
+
+    double radiusSphereOfInfluenceDeparture;
+    double radiusSphereOfInfluenceArrival;
+    {
+        double distanceDepartureToCentralBodies =
+                ( bodyMap.at( centralBody )->getEphemeris( )->getCartesianState(
+                      initialTimeCurrentLeg ).segment( 0, 3 ) - cartesianPositionAtDeparture.segment( 0, 3 ) ).norm( );
+        double distanceArrivalToCentralBodies =
+                ( bodyMap.at( centralBody )->getEphemeris( )->getCartesianState(
+                      finalTimeCurrentLeg ).segment( 0, 3 ) - cartesianPositionAtArrival.segment( 0, 3 ) ).norm( );
+
+
+        // Calculate radius sphere of influence for departure body.
+        radiusSphereOfInfluenceDeparture = tudat::mission_geometry::computeSphereOfInfluence(
+                    distanceDepartureToCentralBodies, gravitationalParameterDepartureBody, gravitationalParameterCentralBody );
+
+        // Calculate radius sphere of influence for arrival body.
+        radiusSphereOfInfluenceArrival = tudat::mission_geometry::computeSphereOfInfluence(
+                    distanceArrivalToCentralBodies, gravitationalParameterArrivalBody, gravitationalParameterCentralBody );
+    }
+
+    double synodicPeriod;
+    {
+        // Calculate the synodic period.
+        double orbitalPeriodDepartureBody = basic_astrodynamics::computeKeplerOrbitalPeriod(
+                    orbital_element_conversions::convertCartesianToKeplerianElements(
+                        bodyMap.at( departureBody )->
+                        getEphemeris( )->getCartesianState( initialTimeCurrentLeg ), gravitationalParameterCentralBody )
+                    [ orbital_element_conversions::semiMajorAxisIndex ],
+                gravitationalParameterCentralBody, gravitationalParameterDepartureBody );
+
+        double orbitalPeriodArrivalBody = basic_astrodynamics::computeKeplerOrbitalPeriod(
+                    orbital_element_conversions::convertCartesianToKeplerianElements(
+                        bodyMap.at( arrivalBody )->
+                        getEphemeris( )->getCartesianState( initialTimeCurrentLeg ), gravitationalParameterCentralBody )
+                    [ orbital_element_conversions::semiMajorAxisIndex ],
+                gravitationalParameterCentralBody, gravitationalParameterArrivalBody );
+
+        if( orbitalPeriodDepartureBody == orbitalPeriodArrivalBody )
+        {
+            synodicPeriod = orbitalPeriodDepartureBody;
+        }
+        else if( orbitalPeriodDepartureBody < orbitalPeriodArrivalBody )
+        {
+            synodicPeriod = basic_astrodynamics::computeSynodicPeriod( orbitalPeriodDepartureBody, orbitalPeriodArrivalBody );
+        }
+        else
+        {
+            synodicPeriod = basic_astrodynamics::computeSynodicPeriod( orbitalPeriodArrivalBody, orbitalPeriodDepartureBody );
+        }
+    }
+
+
+    // Create total propagator termination settings.
+    if( !useBackwardLegToDepartureBody )
+    {
+        std::vector< std::shared_ptr< PropagationTerminationSettings > >  forwardPropagationTerminationSettingsList;
+        forwardPropagationTerminationSettingsList.push_back(
+                    std::make_shared< PropagationDependentVariableTerminationSettings >(
+                        std::make_shared< SingleDependentVariableSaveSettings >(
+                            relative_distance_dependent_variable, bodyToPropagate, arrivalBody ),
+                        terminationDistanceScaler * radiusSphereOfInfluenceArrival, true ) );
+        forwardPropagationTerminationSettingsList.push_back(
+                    std::make_shared< PropagationTimeTerminationSettings >( finalTimeCurrentLeg ) );
+
+        return std::make_shared< PropagationHybridTerminationSettings >( forwardPropagationTerminationSettingsList, true );
+
+    }
+    else
+    {
+        std::vector< std::shared_ptr< PropagationTerminationSettings > >  backwardPropagationTerminationSettingsList;
+        backwardPropagationTerminationSettingsList.push_back(
+                    std::make_shared< PropagationDependentVariableTerminationSettings >(
+                        std::make_shared< SingleDependentVariableSaveSettings >(
+                            relative_distance_dependent_variable, bodyToPropagate, departureBody ),
+                        terminationDistanceScaler * radiusSphereOfInfluenceDeparture, true ) );
+        backwardPropagationTerminationSettingsList.push_back(
+                    std::make_shared< PropagationTimeTerminationSettings >( initialTimeCurrentLeg ) );
+
+        return std::make_shared< PropagationHybridTerminationSettings >( backwardPropagationTerminationSettingsList, true );
+    }
+}
+
+
+std::pair< std::shared_ptr< propagators::PropagationTerminationSettings >,
+std::shared_ptr< propagators::PropagationTerminationSettings > > getSingleLegSphereOfInfluenceTerminationSettings(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::string& bodyToPropagate,
+        const std::string& centralBody,
+        const std::string& departureBody,
+        const std::string& arrivalBody,
+        const double initialTimeCurrentLeg,
+        const double finalTimeCurrentLeg,
+        const double terminationDistanceScaler )
+{
+
+    return std::make_pair(
+                getSingleLegPartSphereOfInfluenceTerminationSettings(
+                    bodyMap, bodyToPropagate, centralBody, departureBody, arrivalBody, initialTimeCurrentLeg,
+                    finalTimeCurrentLeg, true, terminationDistanceScaler ),
+                getSingleLegPartSphereOfInfluenceTerminationSettings(
+                    bodyMap, bodyToPropagate, centralBody, departureBody, arrivalBody, initialTimeCurrentLeg,
+                    finalTimeCurrentLeg, false, terminationDistanceScaler ) );
+}
+
+
+//! Function to calculate the patched conics trajectory and to propagate the corresponding full problem.
+std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > getPatchedConicPropagatorSettings(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< basic_astrodynamics::AccelerationMap >& accelerationMap,
+        const std::vector< std::string >& transferBodyOrder,
+        const std::string& centralBody,
+        const std::string& bodyToPropagate,
+        const std::vector< transfer_trajectories::TransferLegType>& legTypeVector,
+        const std::vector< double >& trajectoryVariableVector,
+        const std::vector< double >& minimumPericenterRadiiVector,
+        const std::vector< double >& semiMajorAxesVector,
+        const std::vector< double >& eccentricitiesVector,
+        const std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSave,
+        const TranslationalPropagatorType propagator,
+        const bool terminationSphereOfInfluence,
+        const double terminationDistanceScaler )
+{
+
+    // Define the patched conic trajectory from the body map.
+    transfer_trajectories::Trajectory trajectory = propagators::createTransferTrajectoryObject(
+                bodyMap, transferBodyOrder, centralBody, legTypeVector, trajectoryVariableVector, minimumPericenterRadiiVector, true,
+                semiMajorAxesVector[ 0 ], eccentricitiesVector[ 0 ], true, semiMajorAxesVector[ 1 ], eccentricitiesVector[ 1 ] );
+
+    // Calculate the trajectory.
+    std::vector< double > timeVector;
+    {
+        std::vector< Eigen::Vector3d > positionVector;
+        std::vector< double > deltaVVector;
+        double totalDeltaV;
+        trajectory.calculateTrajectory( totalDeltaV );
+        trajectory.maneuvers( positionVector, timeVector, deltaVVector );
+    }
+    int numberOfLegs = legTypeVector.size( );
+
+
+    std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+            std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > propagatorSettings;
+
+    std::vector< std::string > centralBodyPropagation;
+    centralBodyPropagation.push_back( centralBody );
+    std::vector< std::string > bodyToPropagatePropagation;
+    bodyToPropagatePropagation.push_back( bodyToPropagate );
+
+
+    std::vector< std::pair< std::shared_ptr< propagators::PropagationTerminationSettings >,
+            std::shared_ptr< propagators::PropagationTerminationSettings > > > terminationSettings;
+
+    int counterLegsIncludingDsm = 0;
+    for( int i = 0 ; i < numberOfLegs - 1 ; i ++ )
+    {
+        if( ( ( legTypeVector[ i ] == transfer_trajectories::mga_Departure ||
+                legTypeVector[ i ] == transfer_trajectories::mga_Swingby ) ) )
+        {
+            double initialTimeCurrentLeg = timeVector[ counterLegsIncludingDsm ];
+            double finalTimeCurrentLeg = timeVector[ counterLegsIncludingDsm + 1 ];
+
+            if( terminationSphereOfInfluence == false )
+            {
+                terminationSettings.push_back(
+                            std::make_pair(
+                                std::make_shared< propagators::PropagationTimeTerminationSettings >( initialTimeCurrentLeg, true ),
+                                std::make_shared< propagators::PropagationTimeTerminationSettings >( finalTimeCurrentLeg, true ) ) );
+            }
+            else
+            {
+                terminationSettings.push_back(
+                            getSingleLegSphereOfInfluenceTerminationSettings(
+                                bodyMap, bodyToPropagate, centralBody, transferBodyOrder.at( i ),
+                                transferBodyOrder.at( i + 1 ), initialTimeCurrentLeg, finalTimeCurrentLeg, terminationDistanceScaler ) );
+            }
+            counterLegsIncludingDsm++;
+        }
+        else
+        {
+            double initialTimeCurrentLegSegment = timeVector[ counterLegsIncludingDsm ];
+            double finalTimeCurrentLegSegment = timeVector[ counterLegsIncludingDsm + 1 ];
+
+            double initialTimeCurrentLeg = timeVector[ counterLegsIncludingDsm ];
+            double finalTimeCurrentLeg = timeVector[ counterLegsIncludingDsm + 2 ];
+
+
+            if( terminationSphereOfInfluence == false )
+            {
+                terminationSettings.push_back(
+                            std::make_pair(
+                                std::make_shared< propagators::PropagationTimeTerminationSettings >( initialTimeCurrentLegSegment, true ),
+                                std::make_shared< propagators::PropagationTimeTerminationSettings >( finalTimeCurrentLegSegment, true ) ) );
+            }
+            else
+            {
+                terminationSettings.push_back(
+                            std::make_pair(
+                                getSingleLegPartSphereOfInfluenceTerminationSettings(
+                                    bodyMap, bodyToPropagate, centralBody, transferBodyOrder.at( i ),
+                                    transferBodyOrder.at( i + 1 ), initialTimeCurrentLeg,
+                                    finalTimeCurrentLeg, true, terminationDistanceScaler ),
+                                std::make_shared< propagators::PropagationTimeTerminationSettings >( finalTimeCurrentLegSegment, true ) ) );
+            }
+
+            counterLegsIncludingDsm++;
+
+            initialTimeCurrentLegSegment = timeVector[ counterLegsIncludingDsm ];
+            finalTimeCurrentLegSegment = timeVector[ counterLegsIncludingDsm + 1 ];
+
+            if( terminationSphereOfInfluence == false )
+            {
+                terminationSettings.push_back(
+                            std::make_pair(
+                                std::make_shared< propagators::PropagationTimeTerminationSettings >( initialTimeCurrentLegSegment, true ),
+                                std::make_shared< propagators::PropagationTimeTerminationSettings >( finalTimeCurrentLegSegment, true ) ) );
+            }
+            else
+            {
+                terminationSettings.push_back(
+                            std::make_pair(
+                                std::make_shared< propagators::PropagationTimeTerminationSettings >( initialTimeCurrentLegSegment, true ),
+                                getSingleLegPartSphereOfInfluenceTerminationSettings(
+                                    bodyMap, bodyToPropagate, centralBody, transferBodyOrder.at( i ),
+                                    transferBodyOrder.at( i + 1 ), initialTimeCurrentLeg,
+                                    finalTimeCurrentLeg, false, terminationDistanceScaler ) ) );
+            }
+            counterLegsIncludingDsm++;
+        }
+    }
+
+    // Create propagator settings.
+    counterLegsIncludingDsm = 0;
+    Eigen::Vector6d initialState;
+
+    for( int i = 0 ; i <  numberOfLegs - 1 ; i ++ )
+    {
+        // If the leg includes one DSM, add another element to the propagator settings vector to take the second part of the leg into account.
+        if( ( legTypeVector[ i ] == transfer_trajectories::mga_Departure ||
+              legTypeVector[ i ] == transfer_trajectories::mga_Swingby ) )
+        {
+            std::shared_ptr< DependentVariableSaveSettings > currentDependentVariablesToSave =
+                    ( dependentVariablesToSave.size( ) != 0 ) ? dependentVariablesToSave.at( i ) : nullptr;
+
+            propagatorSettings.push_back(
+                        std::make_pair(
+                            std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                                centralBodyPropagation, accelerationMap[ i ], bodyToPropagatePropagation, initialState,
+                                terminationSettings[ counterLegsIncludingDsm ].first, propagator, currentDependentVariablesToSave ),
+                            std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                                centralBodyPropagation, accelerationMap[ i ], bodyToPropagatePropagation, initialState,
+                                terminationSettings[ counterLegsIncludingDsm ].second, propagator, currentDependentVariablesToSave ) ) );
+
+            counterLegsIncludingDsm++;
+        }
+        else
+        {
+            std::shared_ptr< DependentVariableSaveSettings > currentDependentVariablesToSave =
+                    ( dependentVariablesToSave.size( ) != 0 ) ? dependentVariablesToSave.at( i ) : nullptr;
+
+            propagatorSettings.push_back(
+                        std::make_pair(
+                            std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                                centralBodyPropagation, accelerationMap[ i ], bodyToPropagatePropagation, initialState,
+                                terminationSettings[ counterLegsIncludingDsm ].first, propagator, currentDependentVariablesToSave ),
+                            std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                                centralBodyPropagation, accelerationMap[ i ], bodyToPropagatePropagation, initialState,
+                                terminationSettings[ counterLegsIncludingDsm ].second, propagator, currentDependentVariablesToSave ) ) );
+            counterLegsIncludingDsm++;
+
+            propagatorSettings.push_back(
+                        std::make_pair(
+                            std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                                centralBodyPropagation, accelerationMap[ i ], bodyToPropagatePropagation, initialState,
+                                terminationSettings[ counterLegsIncludingDsm ].first, propagator, currentDependentVariablesToSave ),
+                            std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                                centralBodyPropagation, accelerationMap[ i ], bodyToPropagatePropagation, initialState,
+                                terminationSettings[ counterLegsIncludingDsm ].second, propagator, currentDependentVariablesToSave ) ) );
+            counterLegsIncludingDsm++;
+        }
+    }
+
+    return propagatorSettings;
+}
+
+//! Function to calculate the patched conics trajectory and to propagate the corresponding full problem.
+void fullPropagationPatchedConicsTrajectory(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< std::string >& transferBodyOrder,
+        const std::string& patchedConicCentralBody,
+        const std::vector< transfer_trajectories::TransferLegType>& legTypeVector,
+        const std::vector< double >& trajectoryVariableVector,
+        const std::vector< double >& minimumPericenterRadiiVector,
+        const std::vector< double >& semiMajorAxesVector,
+        const std::vector< double >& eccentricitiesVector,
+        const std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > propagatorSettings,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings,
+        std::map< int, std::map< double, Eigen::Vector6d > >& patchedConicsResultForEachLeg,
+        std::map< int, std::map< double, Eigen::Vector6d > >& fullProblemResultForEachLeg,
+        std::map< int, std::map< double, Eigen::VectorXd > >& dependentVariableResultForEachLeg )
+{
+    int numberOfLegs = legTypeVector.size( );
+
+    // Define the patched conic trajectory from the body map.
+    transfer_trajectories::Trajectory trajectory = propagators::createTransferTrajectoryObject(
+                bodyMap, transferBodyOrder, patchedConicCentralBody, legTypeVector, trajectoryVariableVector, minimumPericenterRadiiVector, true,
+                semiMajorAxesVector[ 0 ], eccentricitiesVector[ 0 ], true, semiMajorAxesVector[ 1 ], eccentricitiesVector[ 1 ]);
+
+    // Clear output maps.
+    patchedConicsResultForEachLeg.clear( );
+    fullProblemResultForEachLeg.clear( );
+
+    // Calculate the trajectory.
+    std::vector< Eigen::Vector3d > positionVector;
+    std::vector< double > timeVector;
+    std::vector< double > deltaVVector;
     double totalDeltaV;
     trajectory.calculateTrajectory( totalDeltaV );
-    double captureDeltaV;
-    trajectory.getCaptureDeltaV( captureDeltaV );
-
-    std::cout<<"Total/capture Delta V: "<<totalDeltaV<<" "<<captureDeltaV<<std::endl;
-
-    // Retrieve times, positions, and delta V at each maneuver
-    std::vector < Eigen::Vector3d > positionVector;
-    std::vector < double > timeVector;
-    std::vector < double > deltaVVector;
     trajectory.maneuvers( positionVector, timeVector, deltaVVector );
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////////////////             NUMERICALLY PROPAGATE DYNAMICS            ////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Include manoeuvres between transfer bodies when required (considering that a deep space manoeuvre divides a leg into two smaller ones).
+    std::vector< std::string > bodiesAndManoeuvresOrder;
 
-    // Define environment for propagation (equal to that of patched conic)
-    NamedBodyMap bodyMapForPropagation = bodyMapForPatchedConic;
-
-    // Define acceleration settings
-    std::vector< basic_astrodynamics::AccelerationMap > accelerationMap =
-            getAccelerationModelsPerturbedPatchedConicsTrajectory(
-                transferLegTypes.size( ), "Sun", "Spacecraft", bodyMapForPropagation, transferBodyOrder );
-    std::shared_ptr< IntegratorSettings < double > > integratorSettings;
-
-    for( unsigned int k = 1; k < 15; k++)
+    int counterDSMs = 1;
+    for( int i = 0 ; i < numberOfLegs ; i ++ )
     {
-        std::map< int, std::map< double, Eigen::Vector6d > > fullBenchmark;
-        // Define integrator settings
-        //std::shared_ptr< IntegratorSettings < double > > integratorSettings;
-        double relativeTolerance;
-        double absoluteTolerance;
-        double minimumStepSize   = std::numeric_limits< double >::epsilon( );
-        double maximumStepSize   = 10000;
-        double initialStepSize   = 1000;
-        double initialTime = TUDAT_NAN;
+        bodiesAndManoeuvresOrder.push_back(transferBodyOrder[ i ]);
 
-        if( k == 1){
-            relativeTolerance = 1E-15;
-            absoluteTolerance = 1E-15;
-        }
-        else if( k == 2){
-            relativeTolerance = 1E-14;
-            absoluteTolerance = 1E-14;
-        }
-        else if( k == 3){
-            relativeTolerance = 1E-13;
-            absoluteTolerance = 1E-13;
-        }
-        else if( k == 4){
-            relativeTolerance = 1E-12;
-            absoluteTolerance = 1E-12;
-        }
-        else if( k == 5){
-            relativeTolerance = 1E-11;
-            absoluteTolerance = 1E-11;
-        }
-        else if( k == 6){
-            relativeTolerance = 1E-10;
-            absoluteTolerance = 1E-10;
-        }
-        else if( k == 7){
-            relativeTolerance = 1E-9;
-            absoluteTolerance = 1E-9;
-        }
-        else if( k == 8){
-            relativeTolerance = 1E-8;
-            absoluteTolerance = 1E-8;
-        }
-        else if( k == 9){
-            relativeTolerance = 1E-7;
-            absoluteTolerance = 1E-7;
-        }
-        else if( k == 10){
-            relativeTolerance = 1E-6;
-            absoluteTolerance = 1E-6;
-        }
-        else if( k == 11){
-            relativeTolerance = 1E-5;
-            absoluteTolerance = 1E-5;
-        }
-        else if( k == 12){
-            relativeTolerance = 1E-4;
-            absoluteTolerance = 1E-4;
-        }
-        else if( k == 13){
-            relativeTolerance = 1E-3;
-            absoluteTolerance = 1E-3;
-        }
-        else if (k == 14) {
-            relativeTolerance = 1E-2;
-            absoluteTolerance = 1E-2;
-        }
-        integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings < > > (
-                    initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg45, minimumStepSize,
-                    maximumStepSize, relativeTolerance, absoluteTolerance );
-
-
-
-
-
-
-
-
-        // Create list of relevant bodies
-        std::vector< std::string > bodyList;
-        for( unsigned int i = 0; i < transferBodyOrder.size( ); i++ )
+        if( legTypeVector[ i ] != transfer_trajectories::mga_Departure && legTypeVector[ i ] != transfer_trajectories::mga_Swingby )
         {
-            if( std::find( bodyList.begin( ), bodyList.end( ), transferBodyOrder.at( i ) ) ==
-                    bodyList.end( ) )
-            {
-                bodyList.push_back( transferBodyOrder.at( i ) );
-            }
+            bodiesAndManoeuvresOrder.push_back("DSM" + std::to_string(counterDSMs) );
+            counterDSMs++;
         }
-        bodyList.push_back( "Sun" );
-
-        // Create list of dependent variables to save (distance to all flyby bodies and Sun)
-        std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariableList;
-        for( unsigned int i = 0; i < bodyList.size( ); i++ )
-        {
-            dependentVariableList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
-                                                 relative_distance_dependent_variable, "Spacecraft", bodyList.at( i ) ) );
-        }
-
-        // Save dependent variables for each propagation leg
-        std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSave;
-        for( unsigned int j = 0; j < transferBodyOrder.size( ); j++ )
-        {
-            dependentVariablesToSave.push_back( std::make_shared< DependentVariableSaveSettings >(
-                                                    dependentVariableList ) );
-        }
-
-        // Define propagator type
-        TranslationalPropagatorType propagatorType = unified_state_model_exponential_map;
-
-        // Create propagator settings for patched conic (per arc; backward and forward from arc midpoint)
-        // Propagation currently terminates on sphere of influence of body.
-        std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
-                std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > propagatorSettings =
-                getPatchedConicPropagatorSettings(
-                    bodyMapForPropagation, accelerationMap, transferBodyOrder, "Sun", "Spacecraft", transferLegTypes,
-                    trajectoryIndependentVariables, minimumPericenterRadii, departureCaptureSemiMajorAxes,
-                    departureCaptureEccentricities, dependentVariablesToSave, propagatorType, true );
-
-        // Propagate full dynamics of problem
-        std::map< int, std::map< double, Eigen::Vector6d > > lambertTargeterResultForEachLeg;
-        std::map< int, std::map< double, Eigen::Vector6d > > fullProblemResultForEachLeg;
-        std::map< int, std::map< double, Eigen::VectorXd > > dependentVariableResultForEachLeg;
-        fullPropagationPatchedConicsTrajectory(
-                    bodyMapForPropagation, transferBodyOrder,
-                    "Sun", transferLegTypes, trajectoryIndependentVariables, minimumPericenterRadii,
-                    departureCaptureSemiMajorAxes, departureCaptureEccentricities,
-                    propagatorSettings, integratorSettings,
-                    lambertTargeterResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg );
-        std::shared_ptr< interpolators::InterpolatorSettings > interpolatorSettings =
-                std::make_shared< interpolators::LagrangeInterpolatorSettings >( 8 );
-        std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator;
-        std::map < double, Eigen::Vector6d > interpolatedState;
-        if (k == 1){
-
-            for (auto resultIterator : fullProblemResultForEachLeg){
-                std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
-                //std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
-                benchmarkInterpolator =
-                        interpolators::createOneDimensionalInterpolator(
-                            benchmark, interpolatorSettings );
-            }
-        }
-
-        if ( k != 1){
-
-
-            for (auto restultIterator: fullProblemResultForEachLeg){
-                std::map< double, Eigen::Vector6d> resulPerLag = restultIterator.second;
-
-                for( auto timeIterator : resulPerLag)
-                {
-                    interpolatedState[ timeIterator.first ] =
-                            benchmarkInterpolator->interpolate(
-                                timeIterator.first );
-
-                }
-                input_output::writeDataMapToTextFile(
-                            restultIterator.second, "numericalResult" +
-                            std::to_string( restultIterator.first ) + "reffence"+std::to_string(k)+"Interpolated" + ".dat", outputPath );
-
-
-            }
-        }
-
-
-        // Write patched conic results to file for each leg
-        for( auto resultIterator : lambertTargeterResultForEachLeg )
-        {
-            input_output::writeDataMapToTextFile(
-                        resultIterator.second, "lambertResult" +
-                        std::to_string( resultIterator.first ) + "reffence" +std::to_string(k) + ".dat", outputPath );
-        }
-
-        // Write numerical propagation results to file for each leg
-        for( auto resultIterator : fullProblemResultForEachLeg )
-        {
-
-            input_output::writeDataMapToTextFile(
-                        resultIterator.second, "BenchNumericalResult" +
-                        std::to_string( resultIterator.first )+ "reffence" +std::to_string(k)  + ".dat", outputPath );
-        }
-
-        // Write numerical propagation results to file for each leg
-        for( auto resultIterator : dependentVariableResultForEachLeg )
-        {
-
-            input_output::writeDataMapToTextFile(
-                        resultIterator.second, "dependentResult" +
-                        std::to_string( resultIterator.first )+ "reffence" +std::to_string(k)  + ".dat", outputPath );
-        }
-
     }
 
-    // The exit code EXIT_SUCCESS indicates that the program was successfully executed.
-    return EXIT_SUCCESS;
+    int counterLegs = 0;
+    int counterLegWithDSM = 0;
+
+    Eigen::Vector3d departureBodyPosition;
+    Eigen::Vector3d departureBodyVelocity;
+    Eigen::Vector3d velocityAfterDeparture;
+    Eigen::Vector3d velocityBeforeArrival;
+    for( int i = 0 ; i < numberOfLegs - 1 ; i ++ )
+    {
+        // If the leg does not include any DSM.
+        if( legTypeVector[ i ] == transfer_trajectories::mga_Departure || legTypeVector[ i ] == transfer_trajectories::mga_Swingby )
+        {
+            std::vector< std::string > departureAndArrivalBodies;
+            departureAndArrivalBodies.push_back( bodiesAndManoeuvresOrder[ counterLegs ] );
+            departureAndArrivalBodies.push_back( bodiesAndManoeuvresOrder[ counterLegs+ 1 ]);
+
+            // Compute the difference in state between the full problem and the patched conics solution for the current leg.
+            std::map< double, Eigen::Vector6d > patchedConicsResultCurrentLeg;
+            std::map< double, Eigen::Vector6d > fullProblemResultCurrentLeg;
+            std::map< double, Eigen::VectorXd > dependentVariableResultCurrentLeg;
+
+            propagators::propagateMgaWithoutDsmAndFullProblem(
+                        bodyMap,  departureAndArrivalBodies, patchedConicCentralBody, positionVector[ counterLegs ], positionVector[ counterLegs+ 1 ],
+                    timeVector[ counterLegs ],
+                    timeVector[ counterLegs+ 1 ] - timeVector[ counterLegs ], propagatorSettings[ counterLegs ], integratorSettings,
+                    patchedConicsResultCurrentLeg, fullProblemResultCurrentLeg, dependentVariableResultCurrentLeg );
+
+            patchedConicsResultForEachLeg[ counterLegs ] = patchedConicsResultCurrentLeg;
+            fullProblemResultForEachLeg[ counterLegs ] = fullProblemResultCurrentLeg;
+            dependentVariableResultForEachLeg[ counterLegs ] = dependentVariableResultCurrentLeg;
+
+            counterLegs++;
+        }
+
+
+        // If one DSM is included in the leg (velocity formulation).
+        if(  legTypeVector[ i ] == transfer_trajectories::mga1DsmVelocity_Departure || legTypeVector[ i ] == transfer_trajectories::mga1DsmVelocity_Swingby )
+        {
+            std::vector< std::string > departureAndArrivalBodies;
+            departureAndArrivalBodies.push_back( bodiesAndManoeuvresOrder[ counterLegs ] );
+            departureAndArrivalBodies.push_back( bodiesAndManoeuvresOrder[ counterLegs + 2 ]);
+
+            std::vector< double > trajectoryVariableVectorLeg;
+            trajectoryVariableVectorLeg.push_back( trajectoryVariableVector[ numberOfLegs + 1 + (counterLegWithDSM * 4) ] );
+            trajectoryVariableVectorLeg.push_back( trajectoryVariableVector[ numberOfLegs + 2 + (counterLegWithDSM * 4) ] );
+            trajectoryVariableVectorLeg.push_back( trajectoryVariableVector[ numberOfLegs + 3 + (counterLegWithDSM * 4) ] );
+            trajectoryVariableVectorLeg.push_back( trajectoryVariableVector[ numberOfLegs + 4 + (counterLegWithDSM * 4) ] );
+
+            std::map< double, Eigen::Vector6d > patchedConicsResultFromDepartureToDsm;
+            std::map< double, Eigen::Vector6d > fullProblemResultFromDepartureToDsm;
+            std::map< double, Eigen::VectorXd > dependentVariablesFromDepartureToDsm;
+
+            std::map< double, Eigen::Vector6d > patchedConicsResultFromDsmToArrival;
+            std::map< double, Eigen::Vector6d > fullProblemResultFromDsmToArrival;
+            std::map< double, Eigen::VectorXd > dependentVariablesFromDsmToArrival;
+
+            // Compute patched conics and full problem results along the leg.
+            propagators::propagateMga1DsmVelocityAndFullProblem(
+                        bodyMap, departureAndArrivalBodies,
+                        bodiesAndManoeuvresOrder[ counterLegs+ 1 ],  patchedConicCentralBody, positionVector[ counterLegs ],
+                    positionVector[ counterLegs+ 1 ], positionVector[ counterLegs + 2 ], timeVector[ counterLegs ], timeVector[ counterLegs+ 1 ],
+                    timeVector[ counterLegs + 2 ], legTypeVector[ i ], trajectoryVariableVectorLeg, semiMajorAxesVector[ 0 ], eccentricitiesVector[ 0 ],
+                    velocityAfterDeparture, velocityBeforeArrival, propagatorSettings[ counterLegs ], propagatorSettings[ counterLegs+ 1 ],
+                    integratorSettings,
+                    patchedConicsResultFromDepartureToDsm, fullProblemResultFromDepartureToDsm, dependentVariablesFromDepartureToDsm,
+                    patchedConicsResultFromDsmToArrival, fullProblemResultFromDsmToArrival, dependentVariablesFromDsmToArrival );
+
+            // Results for the first part of the leg (from departure body to DSM).
+            patchedConicsResultForEachLeg[ counterLegs ] = patchedConicsResultFromDepartureToDsm;
+            fullProblemResultForEachLeg[ counterLegs ] = fullProblemResultFromDepartureToDsm;
+            dependentVariableResultForEachLeg[ counterLegs ] = dependentVariablesFromDepartureToDsm;
+
+            counterLegs++;
+
+            // Results for the second part of the leg (from DSM to arrival body ).
+            patchedConicsResultForEachLeg[ counterLegs ] = patchedConicsResultFromDsmToArrival;
+            fullProblemResultForEachLeg[ counterLegs ] = fullProblemResultFromDsmToArrival;
+            dependentVariableResultForEachLeg[ counterLegs ] = dependentVariablesFromDsmToArrival;
+
+            counterLegs++;
+            counterLegWithDSM++;
+        }
+
+        // If one DSM is included in the leg (position formulation).
+        if( legTypeVector[ i ] == transfer_trajectories::mga1DsmPosition_Departure
+                || legTypeVector[ i ] == transfer_trajectories::mga1DsmPosition_Swingby )
+        {
+            std::vector< std::string > departureAndArrivalBodies;
+            departureAndArrivalBodies.push_back( bodiesAndManoeuvresOrder[ counterLegs ] );
+            departureAndArrivalBodies.push_back( bodiesAndManoeuvresOrder[ counterLegs + 2 ]);
+
+            std::vector< double > trajectoryVariableVectorLeg;
+            trajectoryVariableVectorLeg.push_back( trajectoryVariableVector[ numberOfLegs + 1 + (counterLegWithDSM * 4) ] );
+            trajectoryVariableVectorLeg.push_back( trajectoryVariableVector[ numberOfLegs + 2 + (counterLegWithDSM * 4) ] );
+            trajectoryVariableVectorLeg.push_back( trajectoryVariableVector[ numberOfLegs + 3 + (counterLegWithDSM * 4) ] );
+            trajectoryVariableVectorLeg.push_back( trajectoryVariableVector[ numberOfLegs + 4 + (counterLegWithDSM * 4) ] );
+
+            std::map< double, Eigen::Vector6d > patchedConicsResultFromDepartureToDsm;
+            std::map< double, Eigen::Vector6d > fullProblemResultFromDepartureToDsm;
+            std::map< double, Eigen::VectorXd > dependentVariablesFromDepartureToDsm;
+
+            std::map< double, Eigen::Vector6d > patchedConicsResultFromDsmToArrival;
+            std::map< double, Eigen::Vector6d > fullProblemResultFromDsmToArrival;
+            std::map< double, Eigen::VectorXd > dependentVariablesFromDsmToArrival;
+
+
+            // Compute patched conics and full problem results along the leg.
+            propagators::propagateMga1DsmPositionAndFullProblem(
+                        bodyMap, departureAndArrivalBodies,
+                        bodiesAndManoeuvresOrder[ counterLegs+ 1 ], patchedConicCentralBody, positionVector[ counterLegs ],
+                    positionVector[ counterLegs+ 1 ], positionVector[ counterLegs + 2 ], timeVector[ counterLegs ], timeVector[ counterLegs+ 1 ],
+                    timeVector[ counterLegs + 2 ], legTypeVector[ i ], trajectoryVariableVectorLeg, minimumPericenterRadiiVector[ i ],
+                    semiMajorAxesVector[ 0 ], eccentricitiesVector[ 0 ], velocityAfterDeparture, velocityBeforeArrival,
+                    propagatorSettings[ counterLegs ], propagatorSettings[ counterLegs+ 1 ], integratorSettings,
+                    patchedConicsResultFromDepartureToDsm, fullProblemResultFromDepartureToDsm, dependentVariablesFromDepartureToDsm,
+                    patchedConicsResultFromDsmToArrival, fullProblemResultFromDsmToArrival, dependentVariablesFromDsmToArrival );
+
+            // Results for the first part of the leg (from departure body to DSM)
+            patchedConicsResultForEachLeg[ counterLegs ] = patchedConicsResultFromDepartureToDsm;
+            fullProblemResultForEachLeg[ counterLegs ] = fullProblemResultFromDepartureToDsm;
+            dependentVariableResultForEachLeg[ counterLegs ] = dependentVariablesFromDepartureToDsm;
+            counterLegs++;
+
+            // Results for the second part of the leg (from DSM to arrival body )
+            patchedConicsResultForEachLeg[ counterLegs ] = patchedConicsResultFromDsmToArrival;
+            fullProblemResultForEachLeg[ counterLegs ] = fullProblemResultFromDsmToArrival;
+            dependentVariableResultForEachLeg[ counterLegs ] = dependentVariablesFromDsmToArrival;
+            counterLegs++;
+            counterLegWithDSM++;
+        }
+    }
+}
+
+//! Function to calculate the patched conics trajectory and to propagate the corresponding full problem.
+void fullPropagationPatchedConicsTrajectory(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< basic_astrodynamics::AccelerationMap >& accelerationMap,
+        const std::vector< std::string >& transferBodyOrder,
+        const std::string& centralBody,
+        const std::string& bodyToPropagate,
+        const std::vector< transfer_trajectories::TransferLegType>& legTypeVector,
+        const std::vector< double >& trajectoryVariableVector,
+        const std::vector< double >& minimumPericenterRadiiVector,
+        const std::vector< double >& semiMajorAxesVector,
+        const std::vector< double >& eccentricitiesVector,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings,
+        std::map< int, std::map< double, Eigen::Vector6d > >& patchedConicsResultForEachLeg,
+        std::map< int, std::map< double, Eigen::Vector6d > >& fullProblemResultForEachLeg,
+        std::map< int, std::map< double, Eigen::VectorXd > >& dependentVariableResultForEachLeg,
+        const bool terminationSphereOfInfluence,
+        const std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSave,
+        const TranslationalPropagatorType propagator)
+{
+    std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+            std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > propagatorSettings =
+            getPatchedConicPropagatorSettings(
+                bodyMap, accelerationMap, transferBodyOrder, centralBody, bodyToPropagate, legTypeVector,
+                trajectoryVariableVector, minimumPericenterRadiiVector, semiMajorAxesVector,
+                eccentricitiesVector, dependentVariablesToSave, propagator, terminationSphereOfInfluence );
+
+    // Calculate the patched conics trajectory and propagate the full dynamics problem.
+    fullPropagationPatchedConicsTrajectory( bodyMap, transferBodyOrder, centralBody, legTypeVector,
+                                            trajectoryVariableVector, minimumPericenterRadiiVector, semiMajorAxesVector,
+                                            eccentricitiesVector, propagatorSettings, integratorSettings,
+                                            patchedConicsResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg );
+
+
+}
+
+
+//! Function to calculate the patched conics trajectory and to propagate the corresponding full problem
+//! with the same acceleration map for every leg.
+void fullPropagationPatchedConicsTrajectory(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const basic_astrodynamics::AccelerationMap& accelerationMap,
+        const std::vector< std::string >& transferBodyOrder,
+        const std::string& centralBody,
+        const std::string& bodyToPropagate,
+        const std::vector< transfer_trajectories::TransferLegType>& legTypeVector,
+        const std::vector< double >& trajectoryVariableVector,
+        const std::vector< double >& minimumPericenterRadiiVector,
+        const std::vector< double >& semiMajorAxesVector,
+        const std::vector< double >& eccentricitiesVector,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings,
+        std::map< int, std::map< double, Eigen::Vector6d > >& patchedConicsResultForEachLeg,
+        std::map< int, std::map< double, Eigen::Vector6d > >& fullProblemResultForEachLeg,
+        std::map< int, std::map< double, Eigen::VectorXd > >& dependentVariableResultForEachLeg,
+        const bool terminationSphereOfInfluence,
+        const std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave,
+        const TranslationalPropagatorType propagator)
+{
+
+    int numberOfLegs = legTypeVector.size(  );
+
+    // Create vectors with identical acceleration maps and dependent variables to save for each leg.
+    std::vector< basic_astrodynamics::AccelerationMap > accelerationMapForEachLeg;
+    std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSaveForEachLeg;
+
+    for( int i = 0 ; i < numberOfLegs; i ++ )
+    {
+        accelerationMapForEachLeg.push_back( accelerationMap );
+        dependentVariablesToSaveForEachLeg.push_back( dependentVariablesToSave );
+    }
+
+    // Compute difference between patched conics trajectory and full problem.
+    fullPropagationPatchedConicsTrajectory(
+                bodyMap, accelerationMapForEachLeg, transferBodyOrder, centralBody, bodyToPropagate, legTypeVector,
+                trajectoryVariableVector, minimumPericenterRadiiVector, semiMajorAxesVector, eccentricitiesVector,
+                integratorSettings, patchedConicsResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg,
+                terminationSphereOfInfluence,
+                dependentVariablesToSaveForEachLeg, propagator);
+
+}
+
+//! Function to compute the difference in cartesian state between patched conics trajectory and full dynamics problem,
+//! at both departure and arrival positions for each leg.
+std::map< int, std::pair< Eigen::Vector6d, Eigen::Vector6d > > getDifferenceFullProblemWrtPatchedConicsTrajectory(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< basic_astrodynamics::AccelerationMap >& accelerationMap,
+        const std::vector< std::string >& transferBodyOrder,
+        const std::string& centralBody,
+        const std::string& bodyToPropagate,
+        const std::vector< transfer_trajectories::TransferLegType >& legTypeVector,
+        const std::vector< double >& trajectoryVariableVector,
+        const std::vector< double >& minimumPericenterRadiiVector,
+        const std::vector< double >& semiMajorAxesVector,
+        const std::vector< double >& eccentricitiesVector,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings,
+        const bool terminationSphereOfInfluence,
+        const std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSave,
+        const TranslationalPropagatorType propagator)
+{
+    int numberOfLegs = legTypeVector.size( );
+    int numberLegsIncludingDSM = ( (trajectoryVariableVector.size( ) - 1 - numberOfLegs) / 4.0 ) + numberOfLegs ;
+
+
+    // Compute difference between patched conics and full problem along the trajectory.
+    std::map< int, std::map< double, Eigen::Vector6d > > patchedConicsResultForEachLeg;
+    std::map< int, std::map< double, Eigen::Vector6d > > fullProblemResultForEachLeg;
+    std::map< int, std::map< double, Eigen::VectorXd > > dependentVariableResultForEachLeg;
+
+    fullPropagationPatchedConicsTrajectory(
+                bodyMap, accelerationMap, transferBodyOrder, centralBody, bodyToPropagate, legTypeVector,
+                trajectoryVariableVector, minimumPericenterRadiiVector, semiMajorAxesVector, eccentricitiesVector,
+                integratorSettings, patchedConicsResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg,
+                terminationSphereOfInfluence, dependentVariablesToSave, propagator);
+
+    // Compute difference at departure and at arrival for each leg (considering that a leg including a DSM consists of two sub-legs).
+    std::map< int, std::pair< Eigen::Vector6d, Eigen::Vector6d > > stateDifferenceAtArrivalAndDepartureForEachLeg;
+
+    for( int i = 0 ; i < numberLegsIncludingDSM - 1 ; i ++ )
+    {
+        std::map< double, Eigen::Vector6d > patchedConicsResultCurrentLeg = patchedConicsResultForEachLeg[ i ];
+        std::map< double, Eigen::Vector6d > fullProblemResultCurrentLeg = fullProblemResultForEachLeg[ i ];
+
+        Eigen::Vector6d statePatchedConicsAtDeparture = patchedConicsResultCurrentLeg.begin( )->second;
+        Eigen::Vector6d stateFullProblemAtDeparture = fullProblemResultCurrentLeg.begin( )->second;
+        Eigen::Vector6d statePatchedConicsAtArrival = patchedConicsResultCurrentLeg.rbegin( )->second;
+        Eigen::Vector6d stateFullProblemAtArrival = fullProblemResultCurrentLeg.rbegin( )->second;
+
+        stateDifferenceAtArrivalAndDepartureForEachLeg[ i ] = std::make_pair(
+                    statePatchedConicsAtDeparture - stateFullProblemAtDeparture,
+                    statePatchedConicsAtArrival - stateFullProblemAtArrival);
+    }
+
+    return stateDifferenceAtArrivalAndDepartureForEachLeg;
+}
+
+
+
+//! Function to compute the difference in cartesian state between patched conics trajectory and full dynamics problem,
+//! at both departure and arrival positions for each leg.
+std::map< int, std::pair< Eigen::Vector6d, Eigen::Vector6d > > getDifferenceFullProblemWrtPatchedConicsTrajectory(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const std::vector< std::string >& transferBodyOrder,
+        const std::string& centralBody,
+        const std::vector< transfer_trajectories::TransferLegType >& legTypeVector,
+        const std::vector< double >& trajectoryVariableVector,
+        const std::vector< double >& minimumPericenterRadiiVector,
+        const std::vector< double >& semiMajorAxesVector,
+        const std::vector< double >& eccentricitiesVector,
+        const std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > propagatorSettings,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings)
+{
+    int numberOfLegs = legTypeVector.size( );
+    int numberLegsIncludingDSM = ( ( trajectoryVariableVector.size( ) - 1 - numberOfLegs) / 4.0 ) + numberOfLegs;
+
+    // Compute difference between patched conics and full problem along the trajectory.
+    std::map< int, std::map< double, Eigen::Vector6d > > patchedConicsResultForEachLeg;
+    std::map< int, std::map< double, Eigen::Vector6d > > fullProblemResultForEachLeg;
+    std::map< int, std::map< double, Eigen::VectorXd > > dependentVariableResultForEachLeg;
+
+    fullPropagationPatchedConicsTrajectory(
+                bodyMap, transferBodyOrder, centralBody, legTypeVector,
+                trajectoryVariableVector, minimumPericenterRadiiVector, semiMajorAxesVector, eccentricitiesVector,
+                propagatorSettings, integratorSettings, patchedConicsResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg );
+
+    // Compute difference at departure and at arrival for each leg (considering that a leg including a DSM consists of two sub-legs).
+    std::map< int, std::pair< Eigen::Vector6d, Eigen::Vector6d > > stateDifferenceAtArrivalAndDepartureForEachLeg;
+
+    for( int i = 0 ; i < numberLegsIncludingDSM - 1 ; i ++ )
+    {
+        std::map< double, Eigen::Vector6d > patchedConicsResultCurrentLeg = patchedConicsResultForEachLeg[ i ];
+        std::map< double, Eigen::Vector6d > fullProblemResultCurrentLeg = fullProblemResultForEachLeg[ i ];
+
+        Eigen::Vector6d statePatchedConicsAtDeparture = patchedConicsResultCurrentLeg.begin( )->second;
+        Eigen::Vector6d stateFullProblemAtDeparture = fullProblemResultCurrentLeg.begin( )->second;
+        Eigen::Vector6d statePatchedConicsAtArrival = patchedConicsResultCurrentLeg.rbegin( )->second;
+        Eigen::Vector6d stateFullProblemAtArrival = fullProblemResultCurrentLeg.rbegin( )->second;
+
+        stateDifferenceAtArrivalAndDepartureForEachLeg[ i ] = std::make_pair(
+                    statePatchedConicsAtDeparture - stateFullProblemAtDeparture,
+                    statePatchedConicsAtArrival - stateFullProblemAtArrival);
+    }
+
+    return stateDifferenceAtArrivalAndDepartureForEachLeg;
+}
+
+
+
+
+//! Function to compute the difference in cartesian state between patched conics trajectory and full dynamics problem,
+//! at both departure and arrival positions for each leg, using the same accelerations for each leg.
+std::map< int, std::pair< Eigen::Vector6d, Eigen::Vector6d > > getDifferenceFullProblemWrtPatchedConicsTrajectory(
+        simulation_setup::NamedBodyMap& bodyMap,
+        const basic_astrodynamics::AccelerationMap& accelerationMap,
+        const std::vector< std::string >& transferBodyOrder,
+        const std::string& centralBody,
+        const std::string& bodyToPropagate,
+        const std::vector< transfer_trajectories::TransferLegType >& legTypeVector,
+        const std::vector< double >& trajectoryVariableVector,
+        const std::vector< double >& minimumPericenterRadiiVector,
+        const std::vector< double >& semiMajorAxesVector,
+        const std::vector< double >& eccentricitiesVector,
+        const std::shared_ptr< numerical_integrators::IntegratorSettings< double > >& integratorSettings,
+        const bool terminationSphereOfInfluence,
+        const std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave,
+        const TranslationalPropagatorType propagator)
+{
+
+    int numberOfLegs = legTypeVector.size( );
+
+    // Create vector with identical acceleration maps.
+    std::vector< basic_astrodynamics::AccelerationMap > accelerationMapForEachLeg;
+    std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSaveForEachLeg;
+
+    for( int i = 0 ; i < numberOfLegs; i ++ )
+    {
+        accelerationMapForEachLeg.push_back( accelerationMap );
+        dependentVariablesToSaveForEachLeg.push_back( dependentVariablesToSave );
+    }
+
+
+    // Compute difference at departure and at arrival for each leg (considering that a leg including a DSM consists of two sub-legs).
+    std::map< int, std::pair< Eigen::Vector6d, Eigen::Vector6d > > stateDifferenceAtArrivalAndDepartureForEachLeg;
+
+    stateDifferenceAtArrivalAndDepartureForEachLeg = getDifferenceFullProblemWrtPatchedConicsTrajectory(
+                bodyMap, accelerationMapForEachLeg,
+                transferBodyOrder, centralBody, bodyToPropagate,
+                legTypeVector, trajectoryVariableVector,
+                minimumPericenterRadiiVector, semiMajorAxesVector,
+                eccentricitiesVector, integratorSettings, terminationSphereOfInfluence, dependentVariablesToSaveForEachLeg, propagator );
+
+    return stateDifferenceAtArrivalAndDepartureForEachLeg;
+
+
+}
+
+
+
+}
+
 }
 
