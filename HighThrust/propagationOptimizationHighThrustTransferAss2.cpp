@@ -17,6 +17,8 @@
 #include <Tudat/SimulationSetup/PropagationSetup/propagationLambertTargeterFullProblem.h>
 #include <tudatApplications/AE4866-Assignments-P-O/HighThrust/highThrustTransfer.h>
 
+
+
 #include "../applicationOutput.h"
 #include <cmath>
 
@@ -44,47 +46,128 @@ std::vector < basic_astrodynamics::AccelerationMap > getAccelerationModelsPertur
     {
         SelectedAccelerationMap accelerationSettingsMap;
 
-        accelerationSettingsMap[ nameBodyToPropagate ][ nameCentralBody ].push_back(
-                    std::make_shared< simulation_setup::AccelerationSettings >(
-                        basic_astrodynamics::central_gravity ) );
-        if( caseNumber == 1){
-        accelerationSettingsMap[ nameBodyToPropagate ][ nameCentralBody ].push_back(
-                    std::make_shared< simulation_setup::AccelerationSettings>(
-                        basic_astrodynamics::cannon_ball_radiation_pressure));
-        }
+        // Cannonbal Radiation
+        if(caseNumber == 0 || caseNumber == 2 ){
 
-        if ( caseNumber == 4 ){
-            accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i ) ].push_back(
-                         std::make_shared< SphericalHarmonicAccelerationSettings >( 2, 2 ) );
         }
         else{
-        accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i ) ].push_back(
-                    std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+            accelerationSettingsMap[ nameBodyToPropagate ][ nameCentralBody ].push_back(
+                        std::make_shared< simulation_setup::AccelerationSettings>(
+                            basic_astrodynamics::cannon_ball_radiation_pressure));
         }
-        if( caseNumber == 2){
+//        // Central Gravity Departure planet
+//        accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i ) ].push_back(
+//                    std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+
+        // Central gravity Saturn
+        if( caseNumber == 0 || caseNumber == 3){
+
+        }
+        else{
             accelerationSettingsMap[ nameBodyToPropagate ][ "Saturn" ].push_back(
                         std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
         }
-        if ( caseNumber == 3 && i !=4){
+        // Central gravity Jupiter
+        if ( caseNumber == 0 || caseNumber == 4){
+
+        }
+        else{
             accelerationSettingsMap[ nameBodyToPropagate ][ "Jupiter" ].push_back(
                         std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
         }
+        // Acceleration central body
+        if( caseNumber == 0 || caseNumber == 5){
+            accelerationSettingsMap[ nameBodyToPropagate ][ nameCentralBody ].push_back(
+                        std::make_shared< simulation_setup::AccelerationSettings >(
+                            basic_astrodynamics::central_gravity ) );
+        }
+        else{
+            accelerationSettingsMap[ nameBodyToPropagate ][ nameCentralBody ].push_back(
+                        std::make_shared< SphericalHarmonicAccelerationSettings >( 2, 0 ) );
+        }
 
-        if( i != numberOfLegs -1 )
-        {
-            if( transferBodyOrder.at( i ) != transferBodyOrder.at( i + 1 ) )
-            {
-                if ( caseNumber == 4 ){
-                    accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i + 1 ) ].push_back(
-                                 std::make_shared< SphericalHarmonicAccelerationSettings >( 2, 2 ) );
-                }
-                else{
-                accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i + 1 ) ].push_back(
-                            std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
-                }
-            }
+        // Central gravity Uranus
+        if( caseNumber == 0 || caseNumber == 6){
 
         }
+        else{
+            accelerationSettingsMap[ nameBodyToPropagate ][ "Uranus" ].push_back(
+                        std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+        }
+        // Central gravity Mars
+        if ( caseNumber == 0 || caseNumber == 7){
+
+        }
+        else{
+            accelerationSettingsMap[ nameBodyToPropagate ][ "Mars" ].push_back(
+                        std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+        }
+        // Central gravity Earth
+        if ( caseNumber == 0 || caseNumber == 8){
+
+        }
+        else{
+            accelerationSettingsMap[ nameBodyToPropagate ][ "Earth" ].push_back(
+                        std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+        }
+        // Central gravity Venus
+        if ( caseNumber == 0 || caseNumber == 9){
+
+        }
+        else{
+            accelerationSettingsMap[ nameBodyToPropagate ][ "Venus" ].push_back(
+                        std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+        }
+
+
+
+//        if( i != numberOfLegs -1 )
+//        {
+//            // Central gravity Jupiter
+
+//            if( transferBodyOrder.at( i ) == "Jupiter" || transferBodyOrder.at(i+1) == "Jupiter" ){
+//            //if( i < 3){
+//            }
+//            else{
+
+//            }
+//            // Central gravity Mars
+//            if( transferBodyOrder.at( i ) == "Mars" || transferBodyOrder.at(i+1) == "Mars" ){
+//            //if( i < 3){
+//            }
+//            else{
+
+//            }
+//            // Central gravity Earth
+//            if( transferBodyOrder.at( i ) == "Earth" || transferBodyOrder.at(i+1) == "Earth" ){
+//            //if( i < 3){
+//            }
+//            else{
+
+//            }
+//            // Central gravity Venus
+//            if( transferBodyOrder.at( i ) == "Venus" || transferBodyOrder.at(i+1) == "Venus" ){
+//            //if( i < 3){
+//            }
+//            else{
+//                if ( caseNumber == 0 || caseNumber == 9){
+
+//                }
+//                else{
+//                    accelerationSettingsMap[ nameBodyToPropagate ][ "Venus" ].push_back(
+//                                std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+//                }
+//            }
+
+//            if( transferBodyOrder.at( i ) != transferBodyOrder.at( i + 1 ) )
+//            {
+//                // central gravity Arrival planet
+//                accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i + 1 ) ].push_back(
+//                            std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+
+//            }
+
+//        }
 
         accelerationMapsVector.push_back( createAccelerationModelsMap(
                                               bodyMap, accelerationSettingsMap, { nameBodyToPropagate }, { nameCentralBody } ) );
@@ -156,6 +239,7 @@ int main( )
     { "Earth", "Venus", transferCaseNames.at( transferCase ).first, transferCaseNames.at( transferCase ).second, "Jupiter" };
     std::vector< TransferLegType > transferLegTypes = { mga_Departure, mga_Swingby, mga_Swingby, mga_Swingby, capture };
 
+
     // Define settings for capture at target planet
     double captureSemiMajorAxis = 1.0895e8 / 0.02;
     double captureEccentricity = 0.98;
@@ -166,30 +250,38 @@ int main( )
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // Create body map
+    std::vector< std::string > transferBodyOrder2 = transferBodyOrder;
+    transferBodyOrder2.push_back("Saturn");
+    transferBodyOrder2.push_back("Uranus");
+
     NamedBodyMap bodyMapForPatchedConic = setupBodyMapFromEphemeridesForPatchedConicsTrajectoryPO(
                 "Sun", "Spacecraft", transferBodyOrder );
 
     bodyMapForPatchedConic[ "Saturn" ] = std::make_shared< Body >( );
     bodyMapForPatchedConic[ "Saturn" ]->setEphemeris(
                 std::make_shared< ephemerides::ApproximatePlanetPositions>(
-                        "Saturn") );
+                    "Saturn") );
     bodyMapForPatchedConic[ "Saturn" ]->setGravityFieldModel(
                 createGravityFieldModel(
                     std::make_shared< CentralGravityFieldSettings >(
                         spice_interface::getBodyGravitationalParameter(
-                             "Saturn"  ) ),  "Saturn"  ) );
+                            "Saturn"  ) ),  "Saturn"  ) );
 
-//    double gravitationalParameter = bodyMapForPatchedConic[ "Sun" ]->getGravityFieldModel()->getGravitationalParameter();
-//    double referenceRadius = bodyMapForPatchedConic[ "Sun" ]->getShapeModel()->getAverageRadius();
-//    Eigen::MatrixXd normalizedCosineCoefficients = (Eigen::Matrix3d( ) << 1.0, 0.0, 0.0,
-//                                                    0.0, 0.0, 0.0,
-//                                                    0.0, 0.0, 2.0E-7 / calculateLegendreGeodesyNormalizationFactor( 2, 2) ).finished( );  // NOTE: entry (i,j) denotes coefficient at degree i and order j
-//    Eigen::MatrixXd normalizedSineCoefficients = (Eigen::Matrix3d( ) << 0.0, 0.0, 0.0,
-//                                                  0.0, 0.0, 0.0,
-//                                                  0.0, 0.0, 0.0/ calculateLegendreGeodesyNormalizationFactor( 2, 2) ).finished( ); // NOTE: entry (i,j) denotes coefficient at degree i and order j
-//    std::string associatedReferenceFrame = "IAU_Sun";
+    bodyMapForPatchedConic[ "Uranus" ] = std::make_shared< Body >( );
+    bodyMapForPatchedConic[ "Uranus" ]->setEphemeris(
+                std::make_shared< ephemerides::ApproximatePlanetPositions>(
+                    "Uranus") );
+    bodyMapForPatchedConic[ "Uranus" ]->setGravityFieldModel(
+                createGravityFieldModel(
+                    std::make_shared< CentralGravityFieldSettings >(
+                        spice_interface::getBodyGravitationalParameter(
+                            "Uranus"  ) ),  "Uranus"  ) );
 
-//    bodyMapForPatchedConic[ "Sun" ]->gravityFieldSettings = std::make_shared< SphericalHarmonicsGravityFieldSettings >(gravitationalParameter, referenceRadius, normalizedCosineCoefficients, normalizedSineCoefficients, associatedReferenceFrame);
+
+
+
+
+
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -198,7 +290,7 @@ int main( )
 
     // Create spacecraft object.
     bodyMapForPatchedConic[ "Spacecraft" ] = std::make_shared< simulation_setup::Body >( );
-    bodyMapForPatchedConic[ "Spacecraft" ]->setConstantBodyMass( 4362.0);
+    bodyMapForPatchedConic[ "Spacecraft" ]->setConstantBodyMass( 400.0);
 
     double referenceAreaRadiation = 100; // AANPASSEN
     double radiationPressureCoefficient = 1.1; // AANPASSEN
@@ -221,6 +313,8 @@ int main( )
     // Get list of minimum flyby periapsis radii
     std::vector< double > minimumPericenterRadii = getDefaultMinimumPericenterRadii(
                 transferBodyOrder );
+
+
 
     std::vector< double > trajectoryIndependentVariables;
     for( unsigned int i = 0; i < trajectoryParameters.size( ) - 1; i++ )
@@ -258,218 +352,249 @@ int main( )
 
     // Define environment for propagation (equal to that of patched conic)
     NamedBodyMap bodyMapForPropagation = bodyMapForPatchedConic;
-        for( unsigned int k = 0; k <4; k++){
-    // Define acceleration settings
-    std::vector< basic_astrodynamics::AccelerationMap > accelerationMap =
-            getAccelerationModelsPerturbedPatchedConicsTrajectory(
-                transferLegTypes.size( ), "Sun", "Spacecraft", bodyMapForPropagation, transferBodyOrder,k );
+    for( unsigned int k = 0; k <10; k++){
+        std::map< unsigned int, double > result;
+        // Define acceleration settings
+        std::vector< basic_astrodynamics::AccelerationMap > accelerationMap =
+                getAccelerationModelsPerturbedPatchedConicsTrajectory(
+                    transferLegTypes.size( ), "Sun", "Spacecraft", bodyMapForPropagation, transferBodyOrder,k );
 
-    // Define integrator settings
-    double relativeTolerance = 1E-11;
-    double absoluteTolerance = 1E-11;
-    double minimumStepSize   = std::numeric_limits< double >::epsilon( );
-    double maximumStepSize   = std::numeric_limits< double >::infinity( );
-    double initialStepSize   = 1000;
-    double initialTime = TUDAT_NAN;
-    std::shared_ptr< IntegratorSettings < double > > integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double> > (
-                initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg78, minimumStepSize,
-                maximumStepSize, relativeTolerance, absoluteTolerance );
+        // Define integrator settings
+        double relativeTolerance = 1E-9;
+        double absoluteTolerance = 1E-9;
+        double minimumStepSize   = std::numeric_limits< double >::epsilon( );
+        double maximumStepSize   = std::numeric_limits< double >::infinity( );
+        double initialStepSize   = 1000;
+        double initialTime = TUDAT_NAN;
+        std::shared_ptr< IntegratorSettings < double > > integratorSettings =  std::make_shared < RungeKuttaVariableStepSizeSettings <double> > (
+                    initialTime, initialStepSize, RungeKuttaCoefficients::rungeKuttaFehlberg78, minimumStepSize,
+                    maximumStepSize, relativeTolerance, absoluteTolerance );
 
-    // Create list of relevant bodies
-    std::vector< std::string > bodyList;
-    for( unsigned int i = 0; i < transferBodyOrder.size( ); i++ )
-    {
-        if( std::find( bodyList.begin( ), bodyList.end( ), transferBodyOrder.at( i ) ) ==
-                bodyList.end( ) )
+        // Create list of relevant bodies
+        std::vector< std::string > bodyList;
+        for( unsigned int i = 0; i < transferBodyOrder.size( ); i++ )
         {
-            bodyList.push_back( transferBodyOrder.at( i ) );
-        }
-    }
-    bodyList.push_back( "Sun" );
-
-    // Create list of dependent variables to save (distance to all flyby bodies and Sun)
-    std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariableList;
-    for( unsigned int i = 0; i < bodyList.size( ); i++ )
-    {
-        dependentVariableList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
-                                             relative_distance_dependent_variable, "Spacecraft", bodyList.at( i ) ) );
-
-    }
-    // Save dependent variables for each propagation leg
-    std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSave;
-    for( unsigned int j = 0; j < transferBodyOrder.size( ); j++ )
-    {
-        dependentVariablesToSave.push_back( std::make_shared< DependentVariableSaveSettings >(
-                                                dependentVariableList ) );
-    }
-
-    // Define propagator type
-    TranslationalPropagatorType propagatorType = unified_state_model_quaternions;
-
-    // Create propagator settings for patched conic (per arc; backward and forward from arc midpoint)
-    // Propagation currently terminates on sphere of influence of body.
-    std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
-            std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > propagatorSettings =
-            getPatchedConicPropagatorSettings(
-                bodyMapForPropagation, accelerationMap, transferBodyOrder, "Sun", "Spacecraft", transferLegTypes,
-                trajectoryIndependentVariables, minimumPericenterRadii, departureCaptureSemiMajorAxes,
-                departureCaptureEccentricities, dependentVariablesToSave, propagatorType, true );
-
-    // Create an object of `steady_clock` class
-    std::chrono::steady_clock sc;
-
-    // Start timer
-    auto start = sc.now();
-
-    // Propagate full dynamics of problem
-    std::map< int, std::map< double, Eigen::Vector6d > > lambertTargeterResultForEachLeg;
-    std::map< int, std::map< double, Eigen::Vector6d > > fullProblemResultForEachLeg;
-    std::map< int, std::map< double, Eigen::VectorXd > > dependentVariableResultForEachLeg;
-    fullPropagationPatchedConicsTrajectory(
-                bodyMapForPropagation, transferBodyOrder,
-                "Sun", transferLegTypes, trajectoryIndependentVariables, minimumPericenterRadii,
-                departureCaptureSemiMajorAxes, departureCaptureEccentricities,
-                propagatorSettings, integratorSettings,
-                lambertTargeterResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg );
-
-    // End timer (starting & ending is done by measuring the time at the moment the process started & ended respectively)
-    auto end = sc.now();
-
-    std::shared_ptr< interpolators::InterpolatorSettings > interpolatorSettings =
-            std::make_shared< interpolators::LagrangeInterpolatorSettings >( 8 );
-    std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator;
-    std::map < double, Eigen::Vector6d > interpolatedState;
-    if( k == 0){
-        refMap = fullProblemResultForEachLeg;
-    }
-    else if ( k != 0){
-        int i = 0;
-
-        for (auto resultIterator : fullProblemResultForEachLeg){
-            std::map < double, Eigen::Vector6d > interpolatedState;
-            std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
-            std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
-            std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator =
-                    interpolators::createOneDimensionalInterpolator(
-                        refMap.at(i), interpolatorSettings );
-
-            for( auto timeIterator : resulPerLag)
+            if( std::find( bodyList.begin( ), bodyList.end( ), transferBodyOrder.at( i ) ) ==
+                    bodyList.end( ) )
             {
-                interpolatedState[ timeIterator.first ] =
-                        benchmarkInterpolator->interpolate(
-                            timeIterator.first );
+                bodyList.push_back( transferBodyOrder.at( i ) );
+            }
+        }
+        bodyList.push_back( "Sun" );
+
+        // Create list of dependent variables to save (distance to all flyby bodies and Sun)
+        std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariableList;
+        for( unsigned int i = 0; i < bodyList.size( ); i++ )
+        {
+            dependentVariableList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
+                                                 relative_distance_dependent_variable, "Spacecraft", bodyList.at( i ) ) );
+
+        }
+        // Save dependent variables for each propagation leg
+        std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSave;
+        for( unsigned int j = 0; j < transferBodyOrder.size( ); j++ )
+        {
+            dependentVariablesToSave.push_back( std::make_shared< DependentVariableSaveSettings >(
+                                                    dependentVariableList ) );
+        }
+
+        // Define propagator type
+        TranslationalPropagatorType propagatorType = cowell;
+
+        // Create propagator settings for patched conic (per arc; backward and forward from arc midpoint)
+        // Propagation currently terminates on sphere of influence of body.
+        std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+                std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > propagatorSettings =
+                getPatchedConicPropagatorSettings(
+                    bodyMapForPropagation, accelerationMap, transferBodyOrder, "Sun", "Spacecraft", transferLegTypes,
+                    trajectoryIndependentVariables, minimumPericenterRadii, departureCaptureSemiMajorAxes,
+                    departureCaptureEccentricities, dependentVariablesToSave, propagatorType, true );
+
+        // Create an object of `steady_clock` class
+        std::chrono::steady_clock sc;
+
+        // Start timer
+        auto start = sc.now();
+
+        // Propagate full dynamics of problem
+        std::map< int, std::map< double, Eigen::Vector6d > > lambertTargeterResultForEachLeg;
+        std::map< int, std::map< double, Eigen::Vector6d > > fullProblemResultForEachLeg;
+        std::map< int, std::map< double, Eigen::VectorXd > > dependentVariableResultForEachLeg;
+        fullPropagationPatchedConicsTrajectory(
+                    bodyMapForPropagation, transferBodyOrder,
+                    "Sun", transferLegTypes, trajectoryIndependentVariables, minimumPericenterRadii,
+                    departureCaptureSemiMajorAxes, departureCaptureEccentricities,
+                    propagatorSettings, integratorSettings,
+                    lambertTargeterResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg );
+
+        // End timer (starting & ending is done by measuring the time at the moment the process started & ended respectively)
+        auto end = sc.now();
+
+        std::shared_ptr< interpolators::InterpolatorSettings > interpolatorSettings =
+                std::make_shared< interpolators::LagrangeInterpolatorSettings >( 8 );
+        std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator;
+        std::map < double, Eigen::Vector6d > interpolatedState;
+        if( k == 0){
+            refMap = fullProblemResultForEachLeg;
+        }
+        else if ( k == 1){
+            int i = 0;
+
+            for (auto resultIterator : fullProblemResultForEachLeg){
+                std::map < double, Eigen::Vector6d > interpolatedState;
+                std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
+                std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
+                std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator =
+                        interpolators::createOneDimensionalInterpolator(
+                            refMap.at(i), interpolatorSettings );
+
+                for( auto timeIterator : resulPerLag)
+                {
+                    interpolatedState[ timeIterator.first ] =
+                            benchmarkInterpolator->interpolate(
+                                timeIterator.first );
+
+                }
+                input_output::writeDataMapToTextFile(
+                            interpolatedState, "numericalResult" +
+                            std::to_string( resultIterator.first ) + "reference_fullProblemComparison"+ std::to_string(k)+"Interpolated" + ".dat", outputPath );
+                i = i+1;
+            }
+        }
+        if( k == 1){
+            refMap = fullProblemResultForEachLeg;
+        }
+        else if ( k > 1){
+            int i = 0;
+
+            for (auto resultIterator : fullProblemResultForEachLeg){
+                std::map < double, Eigen::Vector6d > interpolatedState;
+                std::map< double, Eigen::Vector6d> benchmark = resultIterator.second;
+                std::map< double, Eigen::Vector6d> resulPerLag = resultIterator.second;
+                std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::Vector6d > > benchmarkInterpolator =
+                        interpolators::createOneDimensionalInterpolator(
+                            refMap.at(i), interpolatorSettings );
+
+                for( auto timeIterator : resulPerLag)
+                {
+                    interpolatedState[ timeIterator.first ] =
+                            benchmarkInterpolator->interpolate(
+                                timeIterator.first );
+
+                }
+                input_output::writeDataMapToTextFile(
+                            interpolatedState, "numericalResult" +
+                            std::to_string( resultIterator.first ) + "reference_singleElementComaprison"+ std::to_string(k)+"Interpolated" + ".dat", outputPath );
+                i = i+1;
+            }
+        }
+
+        // Measure time span between start & end
+        auto time_span = static_cast<std::chrono::duration<double>>(end - start);
+        double runTimeInSeconds = time_span.count( );
+        result.insert(std::pair<unsigned int,double>(k,runTimeInSeconds));
+        // Write perturbed satellite propagation history to file.
+        input_output::writeDataMapToTextFile( result, "timeResult"+std::to_string(k) + ".dat", outputPath );
+
+        std::cout<<"Operation took: "<<runTimeInSeconds<<" seconds"<<std::endl;
+
+        double currentArcMiddleTime = trajectoryParameters.at( 0 ) + trajectoryParameters.at( 1 ) / 2.0;
+        for( auto resultIterator : fullProblemResultForEachLeg )
+        {
+
+            int currentArc = resultIterator.first;
+
+            // Retrieve state history for current arc
+            std::map< double, Eigen::Vector6d > fullProblemSolution = resultIterator.second;
+
+            // Retrieve numerical state at middle of arc.
+            Eigen::Vector6d currentArcMiddleState = interpolators::createOneDimensionalInterpolator(
+                        fullProblemSolution, std::make_shared< interpolators::LagrangeInterpolatorSettings >(
+                            8 ) )->interpolate( currentArcMiddleTime * 86400.0 );
+
+            // Reset integrator initial time
+            integratorSettings->initialTime_ = currentArcMiddleTime * 86400.0;
+
+            // Retrieve propagation settings for forward propagation, and reset initial state/final time
+            std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > forwardPropagatorSettings =
+                    propagatorSettings.at( resultIterator.first ).second;
+            forwardPropagatorSettings->resetInitialStates( currentArcMiddleState );
+            forwardPropagatorSettings->resetTerminationSettings( std::make_shared< PropagationTimeTerminationSettings >(
+                                                                     fullProblemSolution.rbegin( )->first ) );
+
+            // Ensure time step is positive (forward integration)
+            integratorSettings->initialTimeStep_ = std::fabs( integratorSettings->initialTimeStep_ );
+
+            // Propagate dynamics forward and print results to file
+            SingleArcDynamicsSimulator< > forwardDynamicsSimulator(
+                        bodyMapForPropagation, integratorSettings, forwardPropagatorSettings );
+            input_output::writeDataMapToTextFile(
+                        forwardDynamicsSimulator.getEquationsOfMotionNumericalSolution( ), "numericalResultForward" +
+                        std::to_string( resultIterator.first ) +std::to_string(k)+ ".dat", outputPath );
+
+
+            // Retrieve propagation settings for backward propagation, and reset initial state/final time
+            std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > backwardPropagatorSettings =
+                    propagatorSettings.at( resultIterator.first ).second;
+            backwardPropagatorSettings->resetInitialStates( currentArcMiddleState );
+            backwardPropagatorSettings->resetTerminationSettings( std::make_shared< PropagationTimeTerminationSettings >(
+                                                                      fullProblemSolution.begin( )->first ) );
+
+            // Set negative timestep (backward integration)
+            integratorSettings->initialTimeStep_ *= -1.0;
+
+            // Propagate dynamics backward and print results to file
+            SingleArcDynamicsSimulator< > backwardDynamicsSimulator(
+                        bodyMapForPropagation, integratorSettings, backwardPropagatorSettings );
+            input_output::writeDataMapToTextFile(
+                        backwardDynamicsSimulator.getEquationsOfMotionNumericalSolution( ), "numericalResultBackward" +
+                        std::to_string( resultIterator.first ) +std::to_string(k)+ ".dat", outputPath );
+
+            // Update arc middle time for next arc.
+            if( currentArc < fullProblemResultForEachLeg.size( ) - 1 )
+            {
+                currentArcMiddleTime += ( trajectoryParameters.at( currentArc + 1 ) + trajectoryParameters.at( currentArc + 2 ) ) / 2.0;
 
             }
-            input_output::writeDataMapToTextFile(
-                        interpolatedState, "numericalResult" +
-                        std::to_string( resultIterator.first ) + "reference"+ std::to_string(k)+"Interpolated" + ".dat", outputPath );
-            i = i+1;
+            //        if( k == 2){
+            //        double bodyMass = bodyMapForPropagation[ "Spacecraft"]->getBodyMass();
+            //        double deltaV = deltaVVector.at(currentArc);
+            //        double Isp = 300;
+            //        double g0 = 9.80665;
+            //        double newBodyMass = bodyMass*exp(-deltaV/Isp/g0);
+            //        bodyMapForPropagation[ "Spacecraft" ]->setConstantBodyMass(newBodyMass);
+            //        //bodyMapForPropagation[ "Spacecraft" ]->updateMass();
+            //        double mass = bodyMapForPropagation[ "Spacecraft"]->getBodyMass();
+            //        std::cout<<"mass: "<<mass<<std::endl;
+            //        }
+
         }
-    }
 
-    // Measure time span between start & end
-    auto time_span = static_cast<std::chrono::duration<double>>(end - start);
-    double runTimeInSeconds = time_span.count( );
-
-    std::cout<<"Operation took: "<<runTimeInSeconds<<" seconds"<<std::endl;
-
-    double currentArcMiddleTime = trajectoryParameters.at( 0 ) + trajectoryParameters.at( 1 ) / 2.0;
-    for( auto resultIterator : fullProblemResultForEachLeg )
-    {
-
-        int currentArc = resultIterator.first;
-
-        // Retrieve state history for current arc
-        std::map< double, Eigen::Vector6d > fullProblemSolution = resultIterator.second;
-
-        // Retrieve numerical state at middle of arc.
-        Eigen::Vector6d currentArcMiddleState = interpolators::createOneDimensionalInterpolator(
-                    fullProblemSolution, std::make_shared< interpolators::LagrangeInterpolatorSettings >(
-                        8 ) )->interpolate( currentArcMiddleTime * 86400.0 );
-
-        // Reset integrator initial time
-        integratorSettings->initialTime_ = currentArcMiddleTime * 86400.0;
-
-        // Retrieve propagation settings for forward propagation, and reset initial state/final time
-        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > forwardPropagatorSettings =
-                propagatorSettings.at( resultIterator.first ).second;
-        forwardPropagatorSettings->resetInitialStates( currentArcMiddleState );
-        forwardPropagatorSettings->resetTerminationSettings( std::make_shared< PropagationTimeTerminationSettings >(
-                                                                 fullProblemSolution.rbegin( )->first ) );
-
-        // Ensure time step is positive (forward integration)
-        integratorSettings->initialTimeStep_ = std::fabs( integratorSettings->initialTimeStep_ );
-
-        // Propagate dynamics forward and print results to file
-        SingleArcDynamicsSimulator< > forwardDynamicsSimulator(
-                    bodyMapForPropagation, integratorSettings, forwardPropagatorSettings );
-        input_output::writeDataMapToTextFile(
-                    forwardDynamicsSimulator.getEquationsOfMotionNumericalSolution( ), "numericalResultForward" +
-                    std::to_string( resultIterator.first ) +std::to_string(k)+ ".dat", outputPath );
-
-
-        // Retrieve propagation settings for backward propagation, and reset initial state/final time
-        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > backwardPropagatorSettings =
-                propagatorSettings.at( resultIterator.first ).second;
-        backwardPropagatorSettings->resetInitialStates( currentArcMiddleState );
-        backwardPropagatorSettings->resetTerminationSettings( std::make_shared< PropagationTimeTerminationSettings >(
-                                                                  fullProblemSolution.begin( )->first ) );
-
-        // Set negative timestep (backward integration)
-        integratorSettings->initialTimeStep_ *= -1.0;
-
-        // Propagate dynamics backward and print results to file
-        SingleArcDynamicsSimulator< > backwardDynamicsSimulator(
-                    bodyMapForPropagation, integratorSettings, backwardPropagatorSettings );
-        input_output::writeDataMapToTextFile(
-                    backwardDynamicsSimulator.getEquationsOfMotionNumericalSolution( ), "numericalResultBackward" +
-                    std::to_string( resultIterator.first ) +std::to_string(k)+ ".dat", outputPath );
-
-        // Update arc middle time for next arc.
-        if( currentArc < fullProblemResultForEachLeg.size( ) - 1 )
+        // Write patched conic results to file for each leg
+        for( auto resultIterator : lambertTargeterResultForEachLeg )
         {
-            currentArcMiddleTime += ( trajectoryParameters.at( currentArc + 1 ) + trajectoryParameters.at( currentArc + 2 ) ) / 2.0;
-
+            input_output::writeDataMapToTextFile(
+                        resultIterator.second, "lambertResult" +
+                        std::to_string( resultIterator.first ) +std::to_string(k)+ ".dat", outputPath );
         }
-//        if( k == 2){
-//        double bodyMass = bodyMapForPropagation[ "Spacecraft"]->getBodyMass();
-//        double deltaV = deltaVVector.at(currentArc);
-//        double Isp = 300;
-//        double g0 = 9.80665;
-//        double newBodyMass = bodyMass*exp(-deltaV/Isp/g0);
-//        bodyMapForPropagation[ "Spacecraft" ]->setConstantBodyMass(newBodyMass);
-//        //bodyMapForPropagation[ "Spacecraft" ]->updateMass();
-//        double mass = bodyMapForPropagation[ "Spacecraft"]->getBodyMass();
-//        std::cout<<"mass: "<<mass<<std::endl;
-//        }
 
-    }
+        // Write numerical propagation results to file for each leg
+        for( auto resultIterator : fullProblemResultForEachLeg )
+        {
 
-    // Write patched conic results to file for each leg
-    for( auto resultIterator : lambertTargeterResultForEachLeg )
-    {
-        input_output::writeDataMapToTextFile(
-                    resultIterator.second, "lambertResult" +
-                    std::to_string( resultIterator.first ) +std::to_string(k)+ ".dat", outputPath );
-    }
+            input_output::writeDataMapToTextFile(
+                        resultIterator.second, "numericalResult" +
+                        std::to_string( resultIterator.first )+std::to_string(k) + ".dat", outputPath );
+        }
 
-    // Write numerical propagation results to file for each leg
-    for( auto resultIterator : fullProblemResultForEachLeg )
-    {
+        // Write numerical propagation results to file for each leg
+        for( auto resultIterator : dependentVariableResultForEachLeg )
+        {
 
-        input_output::writeDataMapToTextFile(
-                    resultIterator.second, "numericalResult" +
-                    std::to_string( resultIterator.first )+std::to_string(k) + ".dat", outputPath );
-    }
-
-    // Write numerical propagation results to file for each leg
-    for( auto resultIterator : dependentVariableResultForEachLeg )
-    {
-
-        input_output::writeDataMapToTextFile(
-                    resultIterator.second, "dependentResult" +
-                    std::to_string( resultIterator.first )+ std::to_string(k) + ".dat", outputPath );
-    }
+            input_output::writeDataMapToTextFile(
+                        resultIterator.second, "dependentResult" +
+                        std::to_string( resultIterator.first )+ std::to_string(k) + ".dat", outputPath );
+        }
     }
 
     // The exit code EXIT_SUCCESS indicates that the program was successfully executed.
